@@ -1,7 +1,10 @@
 version: '3.8'
 
 services:
-  redis:
+  # -------------------------
+  # Core Infrastructure
+  # -------------------------
+  omnitwin-redis:
     image: redis:7-alpine
     container_name: omnitwin-redis
     ports:
@@ -15,7 +18,7 @@ services:
       timeout: 3s
       retries: 5
 
-  qdrant:
+  omnitwin-qdrant:
     image: qdrant/qdrant:latest
     container_name: omnitwin-qdrant
     ports:
@@ -28,6 +31,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # -------------------------
+  # OmniTwin Application
+  # -------------------------
+  omnitwin-api:
+    build: 
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: omnitwin-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      omnitwin-redis:
+        condition: service_healthy
+      omnitwin-qdrant:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=omnitwin-redis
+      - QDRANT_HOST=omnitwin-qdrant
+
+  omnitwin-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: omnitwin-worker
+    depends_on:
+      omnitwin-redis:
+        condition: service_healthy
+      omnitwin-qdrant:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://omnitwin-redis:6379/0
+      - REDIS_HOST=omnitwin-redis
+      - QDRANT_HOST=omnitwin-qdrant
 
 volumes:
   redis_data:

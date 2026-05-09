@@ -27,8 +27,8 @@ INPUT_DIM = 512  # E.g., embedding size of raw text/image
 HIDDEN_DIM = 512
 OUTPUT_DIM = 256 # E.g., parameter vector size
 
-cache = LivestreamCache(host="omnitwin-redis")
-wiki = SolidStateWiki(host="omnitwin-qdrant")
+cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
+wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
 extractor = ParameterExtractor(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM, output_dim=OUTPUT_DIM)
 regression_engine = RegressionEngine(learning_rate=0.05)
 

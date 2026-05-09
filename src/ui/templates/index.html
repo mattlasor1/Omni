@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniTwin Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; color: #333; }
+        header { background-color: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; }
+        .container { display: flex; gap: 20px; flex-wrap: wrap; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex: 1; min-width: 300px; }
+        .card h2 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .stats { font-size: 2em; font-weight: bold; color: #3498db; }
+        .log-box { height: 300px; overflow-y: auto; background: #222; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; }
+        input[type="text"], button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-top: 10px; }
+        button { background-color: #3498db; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #2980b9; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>OmniTwin Core State</h1>
+        <div id="status">Status: Connecting...</div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h2>System Health</h2>
+            <p>Solid-State Parameters (Vector DB): <span class="stats" id="vector-count">Loading...</span></p>
+            <p>Active Ingestion Cache (Redis): <span class="stats" id="cache-count">Loading...</span></p>
+        </div>
+
+        <div class="card">
+            <h2>Ingestion Simulation</h2>
+            <p>Feed text data directly into the Twin's livestream cache.</p>
+            <input type="text" id="text-input" placeholder="Enter text to learn..." style="width: 70%;">
+            <button onclick="ingestText()">Ingest</button>
+        </div>
+
+        <div class="card" style="flex-basis: 100%;">
+            <h2>Memory Activity Log</h2>
+            <div class="log-box" id="activity-log">
+                > OmniTwin UI Initialized...<br>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function logMsg(msg) {
+            const logBox = document.getElementById('activity-log');
+            logBox.innerHTML += `> ${msg}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/v1/state');
+                const data = await res.json();
+                document.getElementById('vector-count').innerText = data.memory_points;
+                document.getElementById('cache-count').innerText = data.cache_length;
+                document.getElementById('status').innerText = 'Status: Active';
+                document.getElementById('status').style.color = '#2ecc71';
+            } catch (e) {
+                document.getElementById('status').innerText = 'Status: Disconnected';
+                document.getElementById('status').style.color = '#e74c3c';
+            }
+        }
+
+        async function ingestText() {
+            const text = document.getElementById('text-input').value;
+            if (!text) return;
+            
+            logMsg(`Ingesting text signal: "${text}"`);
+            try {
+                const res = await fetch('/api/v1/ingest/text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_id: 'ui_dashboard', content: text })
+                });
+                const data = await res.json();
+                logMsg(`Signal accepted. Stream ID: ${data.message_id}`);
+                document.getElementById('text-input').value = '';
+                fetchStats();
+            } catch (e) {
+                logMsg(`Ingestion failed: ${e}`);
+            }
+        }
+
+        // Poll stats every 2 seconds
+        setInterval(fetchStats, 2000);
+        fetchStats();
+    </script>
+</body>
+</html>
