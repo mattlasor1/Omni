@@ -13,13 +13,13 @@ def test_regression_engine():
     new_knowledge = np.zeros(256, dtype=np.float32)
     new_knowledge[0] = 1.0 # One-hot
     
-    updated_mem = engine.regress(new_knowledge, existing_mem)
+    # Regress now returns a tuple (updated_mem, surprise_score)
+    updated_mem, surprise = engine.regress(new_knowledge, existing_mem)
     
     assert updated_mem.shape == (256,)
+    assert isinstance(surprise, float)
     
     # Verify the vector shifted towards new_knowledge
-    # Since existing_mem was uniform, and new_knowledge is heavily weighted on index 0,
-    # the updated memory should have a higher value at index 0 than index 1.
     assert updated_mem[0] > updated_mem[1]
     
     # Verify it remains normalized

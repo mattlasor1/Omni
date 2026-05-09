@@ -11,8 +11,12 @@
         .container { display: flex; gap: 20px; flex-wrap: wrap; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex: 1; min-width: 300px; }
         .card h2 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .stats { font-size: 2em; font-weight: bold; color: #3498db; }
-        .log-box { height: 300px; overflow-y: auto; background: #222; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; }
+        .stats { font-size: 1.5em; font-weight: bold; color: #3498db; }
+        .log-box { height: 250px; overflow-y: auto; background: #222; color: #0f0; font-family: monospace; padding: 10px; border-radius: 4px; }
+        .chat-box { height: 250px; overflow-y: auto; background: #fff; border: 1px solid #ccc; padding: 10px; border-radius: 4px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 8px; border-radius: 4px; max-width: 80%; }
+        .msg.user { background-color: #3498db; color: white; align-self: flex-end; }
+        .msg.twin { background-color: #ecf0f1; color: #333; align-self: flex-start; }
         input[type="text"], button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-top: 10px; }
         button { background-color: #3498db; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #2980b9; }
@@ -21,28 +25,43 @@
 <body>
 
     <header>
-        <h1>OmniTwin Core State</h1>
+        <h1>OmniTwin Cognitive Core</h1>
         <div id="status">Status: Connecting...</div>
     </header>
 
     <div class="container">
+        <!-- Memory State -->
         <div class="card">
-            <h2>System Health</h2>
-            <p>Solid-State Parameters (Vector DB): <span class="stats" id="vector-count">Loading...</span></p>
+            <h2>Hierarchical Memory State</h2>
             <p>Active Ingestion Cache (Redis): <span class="stats" id="cache-count">Loading...</span></p>
+            <p>Episodic Memory (Raw Events): <span class="stats" id="episodic-count">Loading...</span></p>
+            <p>Semantic Memory (Synthesized Concepts): <span class="stats" id="semantic-count">Loading...</span></p>
+            <hr>
+            <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%;">Trigger Autonomous Reflection (Dream)</button>
         </div>
 
+        <!-- Ingestion Simulation -->
         <div class="card">
-            <h2>Ingestion Simulation</h2>
+            <h2>Sensory Ingestion Simulation</h2>
             <p>Feed text data directly into the Twin's livestream cache.</p>
-            <input type="text" id="text-input" placeholder="Enter text to learn..." style="width: 70%;">
+            <input type="text" id="text-input" placeholder="Enter observation to learn..." style="width: 70%;">
             <button onclick="ingestText()">Ingest</button>
+            <div style="margin-top:20px;">
+                <div class="log-box" id="activity-log">
+                    > Sensory UI Initialized...<br>
+                </div>
+            </div>
         </div>
 
+        <!-- Generative Chat -->
         <div class="card" style="flex-basis: 100%;">
-            <h2>Memory Activity Log</h2>
-            <div class="log-box" id="activity-log">
-                > OmniTwin UI Initialized...<br>
+            <h2>Interact with Twin</h2>
+            <div class="chat-box" id="chat-box">
+                <div class="msg twin">Hello. I am OmniTwin. Ask me questions based on my semantic memory.</div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="chat-input" placeholder="Ask a question..." style="flex: 1;">
+                <button onclick="sendQuery()">Ask</button>
             </div>
         </div>
     </div>
@@ -54,12 +73,22 @@
             logBox.scrollTop = logBox.scrollHeight;
         }
 
+        function appendChat(msg, type) {
+            const chatBox = document.getElementById('chat-box');
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            div.innerText = msg;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
         async function fetchStats() {
             try {
                 const res = await fetch('/api/v1/state');
                 const data = await res.json();
-                document.getElementById('vector-count').innerText = data.memory_points;
                 document.getElementById('cache-count').innerText = data.cache_length;
+                document.getElementById('episodic-count').innerText = data.episodic_points;
+                document.getElementById('semantic-count').innerText = data.semantic_points;
                 document.getElementById('status').innerText = 'Status: Active';
                 document.getElementById('status').style.color = '#2ecc71';
             } catch (e) {
@@ -72,7 +101,7 @@
             const text = document.getElementById('text-input').value;
             if (!text) return;
             
-            logMsg(`Ingesting text signal: "${text}"`);
+            logMsg(`Ingesting observation: "${text}"`);
             try {
                 const res = await fetch('/api/v1/ingest/text', {
                     method: 'POST',
@@ -80,7 +109,7 @@
                     body: JSON.stringify({ source_id: 'ui_dashboard', content: text })
                 });
                 const data = await res.json();
-                logMsg(`Signal accepted. Stream ID: ${data.message_id}`);
+                logMsg(`Signal cached. ID: ${data.message_id}`);
                 document.getElementById('text-input').value = '';
                 fetchStats();
             } catch (e) {
@@ -88,7 +117,38 @@
             }
         }
 
-        // Poll stats every 2 seconds
+        async function sendQuery() {
+            const text = document.getElementById('chat-input').value;
+            if (!text) return;
+            
+            appendChat(text, 'user');
+            document.getElementById('chat-input').value = '';
+            
+            try {
+                const res = await fetch('/api/v1/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: text })
+                });
+                const data = await res.json();
+                appendChat(data.response, 'twin');
+            } catch (e) {
+                appendChat("Error generating response.", 'twin');
+            }
+        }
+
+        async function triggerReflection() {
+            logMsg("Triggering autonomous reflection (Dream) state...");
+            try {
+                const res = await fetch('/api/v1/maintenance/reflect', { method: 'POST' });
+                const data = await res.json();
+                logMsg(data.message);
+                fetchStats();
+            } catch (e) {
+                logMsg("Failed to trigger reflection.");
+            }
+        }
+
         setInterval(fetchStats, 2000);
         fetchStats();
     </script>

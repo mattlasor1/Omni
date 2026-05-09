@@ -108,16 +108,27 @@ class ParameterExtractor(nn.Module):
 
 class ContinualRegressionEngine:
     """
-    Advanced Continuous Regression engine.
-    Implements a simplified Elastic Weight Consolidation (EWC) style merging 
-    or optimization approach, ensuring catastrophic forgetting is minimized.
+    Advanced Continuous Regression engine with Attention/Surprise mapping.
+    Implements a simplified Elastic Weight Consolidation (EWC) style merging, 
+    ensuring catastrophic forgetting is minimized, while calculating an 'attention' 
+    score based on the novelty of the incoming signal.
     """
     def __init__(self, learning_rate: float = 0.05, memory_preservation: float = 0.8):
         self.learning_rate = learning_rate
         self.memory_preservation = memory_preservation
 
+    def calculate_surprise(self, new_tensor: torch.Tensor, existing_tensor: torch.Tensor) -> float:
+        """
+        Calculates how 'surprising' or novel the new information is by
+        measuring the cosine distance between the parameter vectors.
+        High distance = High Surprise = Higher Attention weighting.
+        """
+        cosine_sim = nn.functional.cosine_similarity(new_tensor.unsqueeze(0), existing_tensor.unsqueeze(0))
+        distance = 1.0 - cosine_sim.item()
+        return distance
+
     def regress(self, new_parameters: np.ndarray, existing_parameters: np.ndarray, 
-                confidence: float = 1.0) -> np.ndarray:
+                confidence: float = 1.0) -> tuple[np.ndarray, float]:
         """
         Regresses the new knowledge against existing knowledge.
         Uses confidence scores and memory preservation penalties to simulate
@@ -132,15 +143,17 @@ class ContinualRegressionEngine:
         new_tensor = torch.from_numpy(new_parameters)
         existing_tensor = torch.from_numpy(existing_parameters)
         
-        # Calculate deviation (loss gradient proxy)
+        # 1. Calculate Attention / Surprise
+        surprise_score = self.calculate_surprise(new_tensor, existing_tensor)
+        
+        # 2. Calculate deviation (loss gradient proxy)
         deviation = new_tensor - existing_tensor
         
-        # EWC-style penalty: we restrict the update based on memory_preservation
-        # In full EWC, this would use the Fisher Information Matrix to identify important weights.
-        # Here, we use a heuristic based on vector magnitude and preservation factor.
-        
-        # Calculate adaptive update rate
-        adaptive_lr = self.learning_rate * confidence * (1.0 - self.memory_preservation)
+        # 3. EWC-style penalty + Attention boost: 
+        # We boost the learning rate if the information is highly surprising (novelty focus),
+        # while restricting the base update based on memory_preservation to protect old knowledge.
+        attention_multiplier = 1.0 + surprise_score 
+        adaptive_lr = self.learning_rate * confidence * attention_multiplier * (1.0 - self.memory_preservation)
         
         # Update parameters
         updated_tensor = existing_tensor + (adaptive_lr * deviation)
@@ -148,4 +161,4 @@ class ContinualRegressionEngine:
         # Re-normalize
         updated_tensor = nn.functional.normalize(updated_tensor, p=2, dim=0)
         
-        return updated_tensor.numpy()
+        return updated_tensor.numpy(), surprise_score

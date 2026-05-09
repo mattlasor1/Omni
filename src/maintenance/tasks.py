@@ -1,101 +1,123 @@
 import os
 from celery import Celery
 import numpy as np
+from sklearn.cluster import DBSCAN
 import time
 
 from src.memory.cache import LivestreamCache
 from src.memory.vector_db import SolidStateWiki
-from src.learning.engine import ParameterExtractor, RegressionEngine
+from src.learning.engine import ParameterExtractor, ContinualRegressionEngine
+from src.learning.reasoning import CognitiveReasoningEngine
 
-# Initialize Celery app
-# Point broker to Redis
-REDIS_URL = os.getenv("REDIS_URL", "redis://omnitwin-redis:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
+celery_app.conf.update(task_serializer='json', accept_content=['json'], result_serializer='json', timezone='UTC', enable_utc=True)
 
-celery_app.conf.update(
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='UTC',
-    enable_utc=True,
-)
+# Lazily initialized to prevent issues in worker startup
+cache = None
+wiki = None
+extractor = None
+regression_engine = None
+reasoning_engine = None
 
-# Initialize interfaces
-# In a real setup, models would be loaded from disk or artifact store.
-# Using dummy dimensions for the prototype.
-INPUT_DIM = 512  # E.g., embedding size of raw text/image
-HIDDEN_DIM = 512
-OUTPUT_DIM = 256 # E.g., parameter vector size
-
-cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
-wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
-extractor = ParameterExtractor(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM, output_dim=OUTPUT_DIM)
-regression_engine = RegressionEngine(learning_rate=0.05)
-
+def init_interfaces():
+    global cache, wiki, extractor, regression_engine, reasoning_engine
+    if cache is None:
+        cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
+        wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
+        extractor = ParameterExtractor(output_dim=256)
+        regression_engine = ContinualRegressionEngine(learning_rate=0.05, memory_preservation=0.8)
+        reasoning_engine = CognitiveReasoningEngine()
 
 @celery_app.task(name="maintenance.process_cache_to_memory")
 def process_cache_to_memory(batch_size: int = 100):
     """
-    The core maintenance loop:
-    1. Read raw signals from short-term cache.
-    2. Pass through ParameterExtractor.
-    3. Retrieve similar context from Vector DB.
-    4. Regress new parameters against existing ones.
-    5. Save updated state back to Vector DB.
-    6. Acknowledge and clear cache.
+    Ingests cache -> Extracts Math -> Regresses against Episodic Memory.
     """
-    print(f"Starting maintenance run. Fetching {batch_size} records...")
+    init_interfaces()
+    print(f"Starting ingestion maintenance. Fetching {batch_size} records...")
     messages = cache.read_stream(count=batch_size)
     
     if not messages:
-        print("No new data in cache. Maintenance complete.")
         return "No data processed."
 
     processed_ids = []
     
-    # messages format from redis-py xread:
-    # [[b'stream_name', [(b'message_id', {b'field': b'value'})]]]
     for stream_name, stream_messages in messages:
         for msg_id, payload in stream_messages:
-            msg_id_str = msg_id if isinstance(msg_id, str) else msg_id.decode('utf-8')
-            
             try:
-                # 1. Simulate parsing raw payload into a numerical representation
-                # In production, this would involve LLM/Vision embedding APIs.
-                print(f"Processing signal {msg_id_str}...")
-                raw_vector = np.random.rand(INPUT_DIM).astype(np.float32) # Dummy vector for raw data
+                data_type = payload.get("type", "text")
+                raw_content = payload.get("content", "")
                 
-                # 2. Extract mathematical parameters
-                new_parameters = extractor.extract(raw_vector)
+                # Extract mathematical parameters using multi-modal model
+                new_parameters = extractor.extract(data_type, raw_content)
                 
-                # 3. Retrieve similar contextual parameters from solid-state memory
-                # We use the new parameters to find the 'neighborhood' of knowledge to update.
-                similar_records = wiki.retrieve_similar(new_parameters, limit=1)
-                
-                if similar_records:
-                    # 4. Regress against existing parameters
-                    existing_parameters = np.array(similar_records[0].vector)
-                    updated_parameters = regression_engine.regress(new_parameters, existing_parameters)
-                    
-                    # Store the updated parameters (in reality, might update existing point or create new trajectory)
-                    wiki.store_parameters(updated_parameters, metadata={"source": "regression", "original_msg": payload.get('source_id', 'unknown')})
-                    print(f"Regressed and updated parameters for {msg_id_str}")
-                else:
-                    # No similar context, store as completely new knowledge
-                    wiki.store_parameters(new_parameters, metadata={"source": "novel_extraction", "original_msg": payload.get('source_id', 'unknown')})
-                    print(f"Stored novel parameters for {msg_id_str}")
-                    
+                # Store directly to episodic memory to represent raw experience
+                wiki.store_episodic(new_parameters, metadata={"source_id": payload.get('source_id', 'unknown'), "content": raw_content[:200], "type": data_type})
                 processed_ids.append(msg_id)
                 
             except Exception as e:
-                print(f"Error processing message {msg_id_str}: {e}")
-                # Depending on error, might want to DLQ or retry. For now, continue.
+                print(f"Error processing message {msg_id}: {e}")
 
-    # 6. Clear processed data from cache
     if processed_ids:
         cache.acknowledge_and_delete(processed_ids)
-        print(f"Maintenance complete. Integrated {len(processed_ids)} signals into Solid-State Wiki.")
+        print(f"Maintenance complete. Integrated {len(processed_ids)} signals into Episodic Memory.")
         
     return f"Processed {len(processed_ids)} records."
 
-# To simulate a periodic schedule, Celery beat can be configured to call this.
+@celery_app.task(name="maintenance.autonomous_reflection")
+def autonomous_reflection(sample_size: int = 500):
+    """
+    The 'Dream' State.
+    Scans episodic memory, clusters related thoughts, uses LLM to synthesize abstract concepts,
+    and stores them in Semantic Memory.
+    """
+    init_interfaces()
+    print("Initiating Autonomous Reflection Loop...")
+    
+    # 1. Fetch recent episodic memories
+    try:
+        vectors, payloads = wiki.fetch_all_episodic(limit=sample_size)
+        if len(vectors) < 5:
+            return "Not enough episodic memory to reflect upon."
+    except Exception as e:
+        print(f"Reflection failed to fetch memory: {e}")
+        return "Fetch failed."
+
+    # 2. Cluster memories mathematically using DBSCAN to find related concepts
+    clustering = DBSCAN(eps=0.3, min_samples=3, metric='cosine').fit(vectors)
+    labels = clustering.labels_
+    
+    unique_clusters = set(labels)
+    synthesized_count = 0
+    
+    for cluster_id in unique_clusters:
+        if cluster_id == -1: continue # Noise
+        
+        # 3. Gather the cluster
+        cluster_indices = np.where(labels == cluster_id)[0]
+        cluster_payloads = [payloads[i] for i in cluster_indices]
+        
+        # 4. Cognitive Synthesis via LLM
+        synthesis = reasoning_engine.synthesize_concept(cluster_payloads)
+        concept_text = synthesis.get("concept", "")
+        
+        if concept_text and concept_text != "Synthesis error":
+            # 5. Extract math parameters for the newly formed abstract concept
+            semantic_parameters = extractor.extract("text", concept_text)
+            
+            # 6. Regress against existing semantic memory
+            similar_semantic = wiki.retrieve_similar(semantic_parameters, collection=wiki.semantic_collection, limit=1)
+            
+            if similar_semantic:
+                existing_params = np.array(similar_semantic[0].vector)
+                updated_params, surprise = regression_engine.regress(semantic_parameters, existing_params)
+                wiki.store_semantic(updated_params, metadata={"concept": concept_text, "surprise_score": surprise})
+                print(f"Updated semantic concept. Surprise: {surprise:.2f}")
+            else:
+                wiki.store_semantic(semantic_parameters, metadata={"concept": concept_text, "surprise_score": 1.0})
+                print("Formed novel semantic concept.")
+                
+            synthesized_count += 1
+            
+    return f"Reflection complete. Synthesized {synthesized_count} abstract concepts from episodic clusters."
