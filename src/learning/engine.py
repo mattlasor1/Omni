@@ -128,7 +128,7 @@ class ContinualRegressionEngine:
         return distance
 
     def regress(self, new_parameters: np.ndarray, existing_parameters: np.ndarray, 
-                confidence: float = 1.0) -> tuple[np.ndarray, float]:
+                confidence: float = 1.0, state_modifier: float = 1.0) -> tuple[np.ndarray, float]:
         """
         Regresses the new knowledge against existing knowledge.
         Uses confidence scores and memory preservation penalties to simulate
@@ -149,11 +149,12 @@ class ContinualRegressionEngine:
         # 2. Calculate deviation (loss gradient proxy)
         deviation = new_tensor - existing_tensor
         
-        # 3. EWC-style penalty + Attention boost: 
+        # 3. EWC-style penalty + Attention boost + State Modifier: 
         # We boost the learning rate if the information is highly surprising (novelty focus),
         # while restricting the base update based on memory_preservation to protect old knowledge.
+        # The state_modifier injects the twin's emotional/cognitive state (stress, arousal) into the math.
         attention_multiplier = 1.0 + surprise_score 
-        adaptive_lr = self.learning_rate * confidence * attention_multiplier * (1.0 - self.memory_preservation)
+        adaptive_lr = self.learning_rate * confidence * attention_multiplier * state_modifier * (1.0 - self.memory_preservation)
         
         # Update parameters
         updated_tensor = existing_tensor + (adaptive_lr * deviation)

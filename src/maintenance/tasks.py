@@ -15,6 +15,8 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
 celery_app.conf.update(task_serializer='json', accept_content=['json'], result_serializer='json', timezone='UTC', enable_utc=True)
 
+from src.swarm.sync import SwarmProtocol
+
 # Lazily initialized to prevent issues in worker startup
 cache = None
 wiki = None
@@ -23,9 +25,10 @@ extractor = None
 regression_engine = None
 reasoning_engine = None
 curiosity_engine = None
+swarm = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -34,6 +37,7 @@ def init_interfaces():
         regression_engine = ContinualRegressionEngine(learning_rate=0.05, memory_preservation=0.8)
         reasoning_engine = CognitiveReasoningEngine()
         curiosity_engine = CuriosityEngine(reasoning_engine)
+        swarm = SwarmProtocol(wiki)
 
 @celery_app.task(name="maintenance.process_cache_to_memory")
 def process_cache_to_memory(batch_size: int = 100):
@@ -119,14 +123,19 @@ def autonomous_reflection(sample_size: int = 500):
                 existing_params = np.array(similar_semantic[0].vector)
                 updated_params, surprise = regression_engine.regress(semantic_parameters, existing_params)
                 sem_id = wiki.store_semantic(updated_params, metadata={"concept": concept_text, "surprise_score": surprise})
+                final_vector = updated_params
                 print(f"Updated semantic concept. Surprise: {surprise:.2f}")
             else:
                 surprise = 1.0
                 sem_id = wiki.store_semantic(semantic_parameters, metadata={"concept": concept_text, "surprise_score": 1.0})
+                final_vector = semantic_parameters
                 print("Formed novel semantic concept.")
                 
             # Add to Causal Graph
             graph.add_event(sem_id, {"type": "semantic", "concept": concept_text})
+            
+            # Swarm Sync (Broadcast to Peers)
+            swarm.broadcast_new_semantic_concept(sem_id, final_vector.tolist(), {"concept": concept_text})
             
             # If surprise is unusually high (anomalous data/confusion), trigger Curiosity
             if surprise > 0.8:

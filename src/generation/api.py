@@ -5,25 +5,36 @@ from src.memory.vector_db import SolidStateWiki
 from src.learning.engine import ParameterExtractor
 from src.learning.reasoning import CognitiveReasoningEngine
 from src.learning.reinforcement import ReinforcementEngine
+from src.generation.action import ProceduralActionEngine
+from src.execution.tools import ExecutionRouter
+from src.memory.cache import LivestreamCache
+import os
 
 router = APIRouter()
 
 # Defer initialization
 wiki = None
+cache = None
 extractor = None
 reasoning = None
 rl_engine = None
+action_engine = None
+execution_router = None
 
 def init_interfaces():
-    global wiki, extractor, reasoning, rl_engine
+    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
+        cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         extractor = ParameterExtractor(output_dim=256)
         reasoning = CognitiveReasoningEngine()
         rl_engine = ReinforcementEngine(wiki)
+        action_engine = ProceduralActionEngine(reasoning)
+        execution_router = ExecutionRouter(cache)
 
 class QueryPayload(BaseModel):
     query: str
+    execute_action: bool = False
 
 @router.post("/query")
 async def generate_response(payload: QueryPayload):
@@ -51,11 +62,19 @@ async def generate_response(payload: QueryPayload):
     # 3. Generate response using LLM Reasoning Engine
     response = reasoning.generate_response(payload.query, context_blocks)
     
+    action_result = None
+    if payload.execute_action:
+        # 4. If autonomous execution is enabled, decide and act
+        decision_json = action_engine.decide_action(payload.query, context_blocks)
+        action_result = execution_router.execute_action(decision_json)
+        response += f"\n\n[Action Taken]: {decision_json.get('action')} - {action_result}"
+    
     return {
         "query": payload.query,
         "response": response,
         "semantic_context_used": len(context_blocks),
-        "context_ids": context_ids # Returned so UI can send feedback to these memories
+        "context_ids": context_ids, # Returned so UI can send feedback to these memories
+        "action_executed": action_result is not None
     }
 
 class FeedbackPayload(BaseModel):

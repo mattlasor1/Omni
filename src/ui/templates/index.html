@@ -35,12 +35,14 @@
     <div class="container">
         <!-- Memory State -->
         <div class="card">
-            <h2>Hierarchical Memory State</h2>
-            <p>Active Ingestion Cache (Redis): <span class="stats" id="cache-count">Loading...</span></p>
-            <p>Episodic Memory (Raw Events): <span class="stats" id="episodic-count">Loading...</span></p>
-            <p>Semantic Memory (Synthesized Concepts): <span class="stats" id="semantic-count">Loading...</span></p>
+            <h2>Core Metrics & State</h2>
+            <p>Episodic Memory (Events): <span class="stats" id="episodic-count">Loading...</span></p>
+            <p>Semantic Memory (Concepts): <span class="stats" id="semantic-count">Loading...</span></p>
             <hr>
-            <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%;">Trigger Autonomous Reflection (Dream)</button>
+            <p>Internal Stress: <span style="font-weight:bold" id="state-stress">...</span></p>
+            <p>Internal Arousal: <span style="font-weight:bold" id="state-arousal">...</span></p>
+            <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span></p>
+            <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Trigger Autonomous Reflection (Dream)</button>
         </div>
 
         <!-- Ingestion Simulation -->
@@ -72,8 +74,11 @@
             <div class="chat-box" id="chat-box">
                 <div class="msg twin">Hello. I am OmniTwin. Ask me questions based on my semantic memory.</div>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
                 <input type="text" id="chat-input" placeholder="Ask a question..." style="flex: 1;">
+                <label style="font-size: 0.9em; cursor: pointer;">
+                    <input type="checkbox" id="action-toggle"> Enable Autonomous Execution
+                </label>
                 <button onclick="sendQuery()">Ask</button>
             </div>
         </div>
@@ -149,11 +154,22 @@
             try {
                 const res = await fetch('/api/v1/state');
                 const data = await res.json();
-                document.getElementById('cache-count').innerText = data.cache_length;
                 document.getElementById('episodic-count').innerText = data.episodic_points;
                 document.getElementById('semantic-count').innerText = data.semantic_points;
                 document.getElementById('status').innerText = 'Status: Active';
                 document.getElementById('status').style.color = '#2ecc71';
+                
+                // Fetch Swarm
+                const swarmRes = await fetch('/api/v1/swarm/status');
+                const swarmData = await swarmRes.json();
+                document.getElementById('swarm-peers').innerText = swarmData.peers.length;
+                
+                // Simulate state metrics based on queue for demo
+                const stress = Math.min(data.cache_length / 100, 1.0).toFixed(2);
+                document.getElementById('state-stress').innerText = stress;
+                // Arousal random walk for demo
+                document.getElementById('state-arousal').innerText = (Math.random() * 0.5 + 0.2).toFixed(2);
+                
             } catch (e) {
                 document.getElementById('status').innerText = 'Status: Disconnected';
                 document.getElementById('status').style.color = '#e74c3c';
@@ -182,6 +198,7 @@
 
         async function sendQuery() {
             const text = document.getElementById('chat-input').value;
+            const executeAction = document.getElementById('action-toggle').checked;
             if (!text) return;
             
             appendChat(text, 'user');
@@ -191,7 +208,7 @@
                 const res = await fetch('/api/v1/query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: text })
+                    body: JSON.stringify({ query: text, execute_action: executeAction })
                 });
                 const data = await res.json();
                 appendChat(data.response, 'twin', data.context_ids);

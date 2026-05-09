@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from src.ingestion.api import router as ingestion_router
 from src.ingestion.state_api import router as state_router
 from src.generation.api import router as generation_router
+from src.swarm.api import router as swarm_router
 import os
 
 app = FastAPI(
@@ -17,6 +18,7 @@ app = FastAPI(
 app.include_router(ingestion_router, prefix="/api/v1")
 app.include_router(state_router, prefix="/api/v1")
 app.include_router(generation_router, prefix="/api/v1")
+app.include_router(swarm_router, prefix="/api/v1/swarm")
 
 # UI Templating
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
