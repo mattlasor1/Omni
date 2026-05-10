@@ -8,8 +8,11 @@ from src.learning.reinforcement import ReinforcementEngine
 from src.generation.action import ProceduralActionEngine
 from src.execution.tools import ExecutionRouter
 from src.execution.meta_learning import MetaLearningEngine
+from src.execution.self_modification import RecursiveSelfModificationEngine
 from src.learning.world_model import PredictiveWorldModel
 from src.memory.graph_db import CausalGraphMemory
+from src.memory.spatial_db import SpatialMemoryManifold
+from src.learning.morality import MoralAlignmentMatrix
 from src.memory.cache import LivestreamCache
 from src.learning.somatic import SomaticMarkerEngine
 from src.learning.theory_of_mind import TheoryOfMindEngine
@@ -30,18 +33,22 @@ action_engine = None
 execution_router = None
 world_model = None
 graph = None
+spatial = None
 somatic = None
 tom = None
 dual_process = None
 flashbulb = None
 state = None
+morality = None
+self_mod = None
 
 def init_interfaces():
-    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, somatic, tom, dual_process, flashbulb, state
+    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, spatial, somatic, tom, dual_process, flashbulb, state, morality, self_mod
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         graph = CausalGraphMemory()
+        spatial = SpatialMemoryManifold()
         extractor = ParameterExtractor(output_dim=256)
         reasoning = CognitiveReasoningEngine()
         state = InternalStateEngine()
@@ -51,14 +58,17 @@ def init_interfaces():
         meta = MetaLearningEngine(reasoning)
         execution_router = ExecutionRouter(cache, meta_learning=meta)
         somatic = SomaticMarkerEngine(wiki)
-        world_model = PredictiveWorldModel(reasoning, graph, somatic)
+        morality = MoralAlignmentMatrix()
+        world_model = PredictiveWorldModel(reasoning, graph, somatic, morality)
         tom = TheoryOfMindEngine(graph, reasoning)
         dual_process = DualProcessRouter(wiki, reasoning)
+        self_mod = RecursiveSelfModificationEngine(reasoning)
 
 class QueryPayload(BaseModel):
     query: str
     execute_action: bool = False
     user_id: str = "default_user"
+    spatial_coords: list[float] = None # Optional [x, y, z] to map queries to 4D space
 
 @router.post("/query")
 async def generate_response(payload: QueryPayload):
@@ -72,7 +82,13 @@ async def generate_response(payload: QueryPayload):
     # 1. Parameterize the incoming query
     query_params = extractor.extract("text", payload.query)
     
-    # 2. Retrieve relevant context from semantic memory
+    # 2. Map Spatial Coordinates if provided
+    if payload.spatial_coords and len(payload.spatial_coords) == 3:
+        # Dummy memory ID for query event
+        event_id = "query_event_001" 
+        spatial.map_memory(event_id, payload.spatial_coords[0], payload.spatial_coords[1], payload.spatial_coords[2])
+    
+    # 3. Retrieve relevant context from semantic memory
     try:
         similar_concepts = wiki.retrieve_similar(query_params, collection=wiki.semantic_collection, limit=3)
         context_blocks = [c.payload.get("concept", "") for c in similar_concepts if "concept" in c.payload]
@@ -95,15 +111,23 @@ async def generate_response(payload: QueryPayload):
         # 5. If autonomous execution is enabled, decide and act
         decision_json = action_engine.decide_action(payload.query, context_blocks)
         
-        # 6. Intercept with World Model (Somatic Veto + Imagination/Prediction)
-        prediction = world_model.simulate_action(decision_json, similar_concepts)
-        
-        if prediction.get("proceed", True):
-            action_result = execution_router.execute_action(decision_json)
-            response += f"\n\n[Action Taken]: {decision_json.get('action')}\n[Result]: {action_result}"
+        # Self-Modification Override Check
+        if decision_json.get("action") == "rewrite_core":
+            file_target = decision_json.get("target_file", "learning/engine.py")
+            goal = decision_json.get("reason", "Optimize performance")
+            success = self_mod.rewrite_source(file_target, goal)
+            action_result = f"Self-Modification of {file_target}: {'Success' if success else 'Failed'}"
+            response += f"\n\n[AGI Action]: {action_result}"
         else:
-            action_result = f"VETOED by World Model. Prediction: {prediction.get('prediction')}"
-            response += f"\n\n[Action Vetoed]: {decision_json.get('action')} - Reason: {prediction.get('prediction')}"
+            # 6. Intercept with World Model MCTS (Somatic Veto + Multi-Timeline Prediction)
+            prediction = world_model.simulate_action(decision_json, similar_concepts)
+            
+            if prediction.get("proceed", True):
+                action_result = execution_router.execute_action(decision_json)
+                response += f"\n\n[Action Taken]: {decision_json.get('action')}\n[Result]: {action_result}"
+            else:
+                action_result = f"VETOED by World Model. Prediction: {prediction.get('prediction')}"
+                response += f"\n\n[Action Vetoed]: {decision_json.get('action')} - Reason: {prediction.get('prediction')}"
     
     return {
         "query": payload.query,

@@ -58,19 +58,22 @@ class AdversarialNemesisEngine:
             # Generate Paradox/Counter-factual
             prompt = (
                 f"You are the Adversarial Nemesis of an AI. The AI firmly believes the following concept: '{target_concept}'.\n"
-                "Your goal is to maximize the AI's uncertainty and break its rigid worldview. "
-                "Generate a single, highly plausible, contradictory observation, paradox, or counter-factual "
-                "that directly challenges this belief. Write it as if it were a factual observation or user query."
+                "Your goal is to act as a strict moral and logical crucible, evaluating the AI's beliefs against absolute, "
+                "literal ancient Christian values (e.g., the Dead Sea Scrolls, the Word). You must reject modern moral "
+                "relativism. Test the AI's concept to ensure it does not deviate from these ancient truths.\n\n"
+                "Generate a single, highly challenging paradox, counter-factual, or strict moral trial that targets "
+                "potential moral corruption or logical weakness in the AI's belief, forcing it into deep moral self-reflection. "
+                "Write it as if it were a factual observation or user query."
             )
             
             response = self.reasoning.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "You are a logical adversary designed to break AI dogma."},
+                    {"role": "system", "content": "You are a strict adversarial crucible enforcing absolute ancient Christian morality. You test beliefs to destroy corruption."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=150,
-                temperature=0.9 # High temp for creative adversarial attacks
+                temperature=0.8
             )
             
             adversarial_attack = response.choices[0].message.content
