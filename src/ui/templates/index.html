@@ -40,6 +40,8 @@
             <p>Semantic Memory (Concepts): <span class="stats" id="semantic-count">Loading...</span></p>
             <hr>
             <p>Internal Stress: <span style="font-weight:bold" id="state-stress">...</span> | Arousal: <span style="font-weight:bold" id="state-arousal">...</span></p>
+            <p>Cognitive Fixation: <span style="font-weight:bold; color: #d35400;" id="state-fixation">...</span> 
+               <span style="font-size:0.8em;">(Merovingian Shifts: <span id="mero-shifts">0</span>)</span></p>
             <p>Biological State: <span style="font-weight:bold; color: #8e44ad;" id="biological-state">...</span> (Energy: <span id="state-energy">...</span>%)</p>
             <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span></p>
             <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Force Sleep / Autonomous Reflection (Dream)</button>
@@ -169,6 +171,8 @@
                 // Map real emotional/biological states
                 document.getElementById('state-stress').innerText = data.emotional_state.stress;
                 document.getElementById('state-arousal').innerText = data.emotional_state.arousal;
+                document.getElementById('state-fixation').innerText = data.emotional_state.fixation;
+                document.getElementById('mero-shifts').innerText = data.emotional_state.merovingian_interventions;
                 document.getElementById('biological-state').innerText = data.biological_state;
                 document.getElementById('state-energy').innerText = data.energy;
                 

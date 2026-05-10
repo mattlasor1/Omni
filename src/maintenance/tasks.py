@@ -93,11 +93,16 @@ def process_cache_to_memory(batch_size: int = 100):
             circadian_engine.tick(active_processing_load=len(processed_ids))
         except:
             pass
+            
+    # Check for Merovingian shift during normal ingestion mapping
+    if state_engine.check_merovingian_shift():
+        # Inject an arbitrary learning task to break fixation
+        autonomous_reflection.delay(sample_size=50, force_merovingian=True)
         
     return f"Processed {len(processed_ids)} records."
 
 @celery_app.task(name="maintenance.autonomous_reflection")
-def autonomous_reflection(sample_size: int = 500):
+def autonomous_reflection(sample_size: int = 500, force_merovingian: bool = False):
     """
     The 'Dream' State.
     Scans episodic memory, clusters related thoughts, uses LLM to synthesize abstract concepts,
@@ -115,8 +120,28 @@ def autonomous_reflection(sample_size: int = 500):
         print(f"Reflection failed to fetch memory: {e}")
         return "Fetch failed."
 
+    # Merovingian Injection: If forced, pick a random historical semantic concept 
+    # and pull its causal chain to force a tangential abstraction instead of normal clustering.
+    if force_merovingian:
+        print("Executing Merovingian Tangent Reflection...")
+        # Get random semantic nodes to force a shift
+        import random
+        try:
+            random_points = wiki.client.scroll(collection_name=wiki.semantic_collection, limit=10, with_vectors=True)[0]
+            if random_points:
+                target = random.choice(random_points)
+                # Walk the graph slightly to find a tangent
+                chain = graph.get_causal_chain(target.id)
+                tangent_payloads = [{"content": c["attributes"].get("concept", "Chaos signal")} for c in chain]
+                if tangent_payloads:
+                    vectors = [np.array(target.vector)] # Dummy to pass loop
+                    payloads = tangent_payloads * len(vectors) # Force context
+        except Exception as e:
+            print(f"Merovingian extraction failed: {e}")
+
     # 2. Cluster memories mathematically using DBSCAN to find related concepts
-    clustering = DBSCAN(eps=0.3, min_samples=3, metric='cosine').fit(vectors)
+    # (If merovingian triggered, vectors might just be the hijacked tangent)
+    clustering = DBSCAN(eps=0.3, min_samples=3 if not force_merovingian else 1, metric='cosine').fit(vectors)
     labels = clustering.labels_
     
     unique_clusters = set(labels)
@@ -130,6 +155,10 @@ def autonomous_reflection(sample_size: int = 500):
         cluster_payloads = [payloads[i] for i in cluster_indices]
         
         # 4. Cognitive Synthesis via LLM
+        # If Merovingian, append instructions to find a tangential connection
+        if force_merovingian:
+            cluster_payloads.append({"content": "MEROVINGIAN DIRECTIVE: Find a completely novel, tangential perspective based on this data to break current cognitive fixation."})
+            
         synthesis = reasoning_engine.synthesize_concept(cluster_payloads)
         concept_text = synthesis.get("concept", "")
         

@@ -9,6 +9,24 @@ class InternalStateEngine:
         self.stress = 0.0      # Driven by ingestion load / queue size
         self.confidence = 0.5  # Driven by RL feedback history
         self.arousal = 0.0     # Driven by surprise/novelty of recent data
+        
+        # Merovingian Concept (Causal Chaos to prevent hyperfixation)
+        self.fixation_index = 0.0
+        self.merovingian_interventions = 0
+
+    def check_merovingian_shift(self) -> bool:
+        """
+        Evaluates if the agent has hyperfixated.
+        If fixation > 0.9, it triggers a Merovingian Causal Shift (controlled chaos),
+        resetting arousal and forcing a tangential learning path.
+        """
+        if self.fixation_index > 0.9:
+            self.fixation_index = 0.0
+            self.arousal = 0.1 # Force arousal drop to break the current cycle
+            self.merovingian_interventions += 1
+            print("MEROVINGIAN SHIFT TRIGGERED: Cause and effect hijacked. Breaking hyperfixation.")
+            return True
+        return False
 
     def update_stress(self, queue_length: int):
         """
@@ -31,8 +49,17 @@ class InternalStateEngine:
     def update_arousal(self, surprise_score: float):
         """
         Highly novel data increases arousal (attention/wakefulness).
+        Tracks fixation: If arousal stays very high consistently, fixation increases.
         """
         normalized_surprise = min(surprise_score, 1.0)
+        
+        # If arousal is high and new data isn't surprising enough to reset it, fixation builds.
+        # If data is highly surprising, fixation drops (attention shifted naturally).
+        if self.arousal > 0.7 and normalized_surprise < 0.3:
+            self.fixation_index = min(1.0, self.fixation_index + 0.1)
+        elif normalized_surprise > 0.7:
+            self.fixation_index = max(0.0, self.fixation_index - 0.2)
+            
         self.arousal = (self.arousal * 0.7) + (normalized_surprise * 0.3)
 
     def get_learning_rate_modifier(self) -> float:
@@ -61,5 +88,7 @@ class InternalStateEngine:
             "stress": round(self.stress, 2),
             "confidence": round(self.confidence, 2),
             "arousal": round(self.arousal, 2),
+            "fixation": round(self.fixation_index, 2),
+            "merovingian_interventions": self.merovingian_interventions,
             "learning_multiplier": round(self.get_learning_rate_modifier(), 2)
         }
