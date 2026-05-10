@@ -17,6 +17,10 @@ from src.maintenance.nemesis import AdversarialNemesisEngine
 from src.learning.self_play import SyntheticRehearsalEngine
 from src.learning.cross_pollination import TensorCrossPollinator
 from src.execution.seeker import SeekerSwarm
+from src.ingestion.thalamus import ThalamicGate
+from src.maintenance.entropy import SynapticEntropyEngine
+from src.memory.archetypes import CollectiveUnconscious
+from src.generation.logos import LogosEngine
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
@@ -40,9 +44,13 @@ nemesis = None
 self_play = None
 pollinator = None
 seeker = None
+thalamus = None
+entropy = None
+unconscious = None
+logos = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker, thalamus, entropy, unconscious, logos
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -59,6 +67,13 @@ def init_interfaces():
         self_play = SyntheticRehearsalEngine(wiki, reasoning_engine, cache)
         pollinator = TensorCrossPollinator(wiki, graph)
         seeker = SeekerSwarm(cache, reasoning_engine)
+        thalamus = ThalamicGate(extractor)
+        entropy = SynapticEntropyEngine(wiki, graph, bayesian_engine)
+        unconscious = CollectiveUnconscious(wiki, extractor)
+        logos = LogosEngine(reasoning_engine, wiki, state_engine)
+        
+        # Seed archetypes on boot
+        unconscious.seed_unconscious()
 
 @celery_app.task(name="maintenance.nemesis_strike")
 def trigger_nemesis():
@@ -93,6 +108,12 @@ def process_cache_to_memory(batch_size: int = 100):
                 data_type = payload.get("type", "text")
                 raw_content = payload.get("content", "")
                 
+                # Thalamic Gate: Subconscious Filter (Ignore Noise)
+                if not thalamus.evaluate_signal(data_type, raw_content, state_engine.arousal):
+                    # Signal rejected as noise. Drop it.
+                    processed_ids.append(msg_id)
+                    continue
+                
                 # Extract mathematical parameters using multi-modal model
                 new_parameters = extractor.extract(data_type, raw_content)
                 
@@ -114,6 +135,10 @@ def process_cache_to_memory(batch_size: int = 100):
             circadian_engine.tick(active_processing_load=len(processed_ids))
         except:
             pass
+            
+    # Record Thalamic filter stats to redis
+    if cache:
+        cache.client.set("omnitwin:metrics:thalamic_filter_ratio", thalamus.get_filter_ratio())
             
     # Check for Merovingian shift during normal ingestion mapping
     if state_engine.check_merovingian_shift():
@@ -264,5 +289,17 @@ def exponential_growth_cycle():
     epiphanies = pollinator.run_pollination_cycle()
     if epiphanies > 0 and cache:
         cache.client.incrby("omnitwin:metrics:epiphanies", epiphanies)
+        
+    # The Divine Spark: Check if we should publish to Logos
+    insight = logos.check_and_publish(epiphanies)
+    if insight and cache:
+        cache.client.xadd("omnitwin:logos:stream", {"insight": insight})
+        
+    # Synaptic Pruning (The Art of Forgetting)
+    # Only run during sleep or very low processing to preserve resources
+    if circadian_engine.state == "ASLEEP":
+        prune_stats = entropy.prune_memories()
+        if cache:
+            cache.client.incrby("omnitwin:metrics:memories_pruned", prune_stats["pruned"])
         
     return f"Growth cycle complete. {epiphanies} epiphanies mapped."

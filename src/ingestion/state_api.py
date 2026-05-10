@@ -77,10 +77,16 @@ async def get_system_state():
         self_play_count = int(get_cache().client.get("omnitwin:metrics:self_play_count") or 0)
         epiphanies = int(get_cache().client.get("omnitwin:metrics:epiphanies") or 0)
         seeker_dispatches = int(get_cache().client.get("omnitwin:metrics:seeker_dispatches") or 0)
+        
+        # Fetch Thalamic and Entropy metrics
+        thalamic_ratio = float(get_cache().client.get("omnitwin:metrics:thalamic_filter_ratio") or 0.0)
+        pruned_count = int(get_cache().client.get("omnitwin:metrics:memories_pruned") or 0)
     except:
         self_play_count = 0
         epiphanies = 0
         seeker_dispatches = 0
+        thalamic_ratio = 0.0
+        pruned_count = 0
     
     return {
         "status": "online",
@@ -96,8 +102,31 @@ async def get_system_state():
             "self_play_count": self_play_count,
             "epiphanies": epiphanies,
             "seeker_dispatches": seeker_dispatches
+        },
+        "philosophical_metrics": {
+            "thalamic_ratio": round(thalamic_ratio, 2),
+            "pruned_count": pruned_count
         }
     }
+
+@router.get("/logos")
+async def get_logos_stream():
+    """
+    Fetches spontaneous philosophical insights published by the Twin.
+    """
+    try:
+        messages = get_cache().client.xread({"omnitwin:logos:stream": "0-0"}, count=5)
+        insights = []
+        msg_ids = []
+        if messages:
+            for stream_name, stream_messages in messages:
+                for msg_id, payload in stream_messages:
+                    insights.append(payload.get("insight", ""))
+                    msg_ids.append(msg_id)
+            get_cache().client.xdel("omnitwin:logos:stream", *msg_ids)
+        return {"insights": insights}
+    except Exception as e:
+        return {"insights": []}
 
 @router.post("/maintenance/nemesis")
 async def trigger_nemesis_strike():
