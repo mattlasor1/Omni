@@ -38,6 +38,7 @@
             <h2>Core Metrics & State</h2>
             <p>Episodic Memory (Events): <span class="stats" id="episodic-count">Loading...</span></p>
             <p>Semantic Memory (Concepts): <span class="stats" id="semantic-count">Loading...</span></p>
+            <p style="font-size: 0.9em; margin-top: -10px;">Avg Fractal Depth: <span id="avg-depth">...</span> | Epistemic Uncertainty: <span id="avg-unc">...</span></p>
             <hr>
             <p>Internal Stress: <span style="font-weight:bold" id="state-stress">...</span> | Arousal: <span style="font-weight:bold" id="state-arousal">...</span></p>
             <p>Cognitive Fixation: <span style="font-weight:bold; color: #d35400;" id="state-fixation">...</span> 
@@ -45,6 +46,7 @@
             <p>Biological State: <span style="font-weight:bold; color: #8e44ad;" id="biological-state">...</span> (Energy: <span id="state-energy">...</span>%)</p>
             <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span></p>
             <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Force Sleep / Autonomous Reflection (Dream)</button>
+            <button onclick="triggerNemesis()" style="background-color: #c0392b; width: 100%; margin-top: 10px;">Force Adversarial Nemesis Strike</button>
             <br>
             <p style="font-size: 0.8em; margin-top: 10px;"><i>Note: Twin can dynamically evolve new execution actions via LLM Meta-Learning when autonomous execution is enabled.</i></p>
         </div>
@@ -160,6 +162,8 @@
                 const data = await res.json();
                 document.getElementById('episodic-count').innerText = data.episodic_points;
                 document.getElementById('semantic-count').innerText = data.semantic_points;
+                document.getElementById('avg-depth').innerText = data.avg_fractal_depth;
+                document.getElementById('avg-unc').innerText = data.avg_uncertainty;
                 document.getElementById('status').innerText = 'Status: Active';
                 document.getElementById('status').style.color = '#2ecc71';
                 
@@ -233,6 +237,17 @@
                 setTimeout(fetchCuriosity, 3000); // Fetch curiosity shortly after dream state
             } catch (e) {
                 logMsg("Failed to trigger reflection.");
+            }
+        }
+
+        async function triggerNemesis() {
+            logMsg("Unleashing Adversarial Nemesis...");
+            try {
+                const res = await fetch('/api/v1/maintenance/nemesis', { method: 'POST' });
+                const data = await res.json();
+                logMsg(data.message);
+            } catch (e) {
+                logMsg("Failed to trigger Nemesis.");
             }
         }
 

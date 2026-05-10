@@ -45,8 +45,27 @@ async def get_system_state():
     try:
         sem_info = get_wiki().client.get_collection(get_wiki().semantic_collection)
         semantic_count = sem_info.points_count
+        
+        # Pull a sample to get average epistemic uncertainty and fractal depth
+        sample = get_wiki().client.scroll(collection_name=get_wiki().semantic_collection, limit=100, with_payload=True)[0]
+        avg_uncertainty = 0.0
+        avg_depth = 0.0
+        if sample:
+            from src.learning.epistemology import BayesianEngine
+            bayes = BayesianEngine()
+            unc_sum = 0.0
+            depth_sum = 0.0
+            for p in sample:
+                a = p.payload.get("bayes_alpha", 1.0)
+                b = p.payload.get("bayes_beta", 1.0)
+                unc_sum += bayes.calculate_uncertainty(a, b)
+                depth_sum += p.payload.get("fractal_depth", 0)
+            avg_uncertainty = unc_sum / len(sample)
+            avg_depth = depth_sum / len(sample)
     except:
         semantic_count = 0
+        avg_uncertainty = 0.0
+        avg_depth = 0.0
 
     se, ce = get_state_engines()
     se.update_stress(cache_len) # Live update stress based on queue
@@ -58,10 +77,21 @@ async def get_system_state():
         "cache_length": cache_len,
         "episodic_points": episodic_count,
         "semantic_points": semantic_count,
+        "avg_uncertainty": round(avg_uncertainty, 4),
+        "avg_fractal_depth": round(avg_depth, 2),
         "emotional_state": state_summary,
         "biological_state": ce.state,
         "energy": round(ce.energy, 1)
     }
+
+@router.post("/maintenance/nemesis")
+async def trigger_nemesis_strike():
+    try:
+        from src.maintenance.tasks import trigger_nemesis
+        trigger_nemesis.delay()
+        return {"status": "success", "message": "Nemesis strike triggered."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @router.get("/curiosity")
 async def get_curiosity_stream():

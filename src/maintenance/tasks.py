@@ -12,6 +12,8 @@ from src.learning.curiosity import CuriosityEngine
 from src.memory.graph_db import CausalGraphMemory
 from src.learning.state import InternalStateEngine
 from src.maintenance.circadian import CircadianEngine
+from src.learning.epistemology import BayesianEngine
+from src.maintenance.nemesis import AdversarialNemesisEngine
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
@@ -30,9 +32,11 @@ curiosity_engine = None
 swarm = None
 state_engine = None
 circadian_engine = None
+bayesian_engine = None
+nemesis = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -44,6 +48,14 @@ def init_interfaces():
         swarm = SwarmProtocol(wiki)
         state_engine = InternalStateEngine()
         circadian_engine = CircadianEngine()
+        bayesian_engine = BayesianEngine()
+        nemesis = AdversarialNemesisEngine(wiki, reasoning_engine, cache)
+
+@celery_app.task(name="maintenance.nemesis_strike")
+def trigger_nemesis():
+    init_interfaces()
+    nemesis.strike()
+    return "Nemesis task completed."
 
 @celery_app.task(name="maintenance.process_cache_to_memory")
 def process_cache_to_memory(batch_size: int = 100):
@@ -170,13 +182,34 @@ def autonomous_reflection(sample_size: int = 500, force_merovingian: bool = Fals
             similar_semantic = wiki.retrieve_similar(semantic_parameters, collection=wiki.semantic_collection, limit=1)
             
             if similar_semantic:
-                existing_params = np.array(similar_semantic[0].vector)
+                existing_point = similar_semantic[0]
+                existing_params = np.array(existing_point.vector)
+                
+                # Bayesian Update
+                alpha = existing_point.payload.get("bayes_alpha", 1.0)
+                beta = existing_point.payload.get("bayes_beta", 1.0)
+                depth = existing_point.payload.get("fractal_depth", 0)
+                
+                # Check if this was a nemesis injection (negative evidence)
+                is_nemesis = any(c.get("context", {}).get("nemesis_injection") for c in cluster_payloads if "context" in c)
+                
+                if is_nemesis:
+                    new_alpha, new_beta = bayesian_engine.bayesian_update(alpha, beta, positive_evidence=0.0, negative_evidence=1.0)
+                else:
+                    new_alpha, new_beta = bayesian_engine.bayesian_update(alpha, beta, positive_evidence=1.0, negative_evidence=0.0)
+                    
+                # Calculate surprise based on new Bayesian epistemology
+                surprise = bayesian_engine.compute_surprise(alpha, beta, 0.0 if is_nemesis else 1.0)
+                
                 # Apply emotional state modifiers to learning rate
                 state_mod = state_engine.get_learning_rate_modifier()
-                updated_params, surprise = regression_engine.regress(semantic_parameters, existing_params, state_modifier=state_mod)
-                sem_id = wiki.store_semantic(updated_params, metadata={"concept": concept_text, "surprise_score": surprise})
+                updated_params, _ = regression_engine.regress(semantic_parameters, existing_params, state_modifier=state_mod)
+                
+                # Overwrite existing point with updated bayes params
+                metadata = {"concept": concept_text, "surprise_score": surprise, "bayes_alpha": new_alpha, "bayes_beta": new_beta, "fractal_depth": depth + 1}
+                sem_id = wiki.store_semantic(updated_params, metadata=metadata, point_id=existing_point.id)
                 final_vector = updated_params
-                print(f"Updated semantic concept. Surprise: {surprise:.2f}")
+                print(f"Updated semantic concept (Fractal Depth {depth+1}). Bayesian Surprise: {surprise:.2f}")
             else:
                 surprise = 1.0
                 sem_id = wiki.store_semantic(semantic_parameters, metadata={"concept": concept_text, "surprise_score": 1.0})
