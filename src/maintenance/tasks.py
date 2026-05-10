@@ -14,6 +14,9 @@ from src.learning.state import InternalStateEngine
 from src.maintenance.circadian import CircadianEngine
 from src.learning.epistemology import BayesianEngine
 from src.maintenance.nemesis import AdversarialNemesisEngine
+from src.learning.self_play import SyntheticRehearsalEngine
+from src.learning.cross_pollination import TensorCrossPollinator
+from src.execution.seeker import SeekerSwarm
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
@@ -34,9 +37,12 @@ state_engine = None
 circadian_engine = None
 bayesian_engine = None
 nemesis = None
+self_play = None
+pollinator = None
+seeker = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -50,6 +56,9 @@ def init_interfaces():
         circadian_engine = CircadianEngine()
         bayesian_engine = BayesianEngine()
         nemesis = AdversarialNemesisEngine(wiki, reasoning_engine, cache)
+        self_play = SyntheticRehearsalEngine(wiki, reasoning_engine, cache)
+        pollinator = TensorCrossPollinator(wiki, graph)
+        seeker = SeekerSwarm(cache, reasoning_engine)
 
 @celery_app.task(name="maintenance.nemesis_strike")
 def trigger_nemesis():
@@ -227,11 +236,33 @@ def autonomous_reflection(sample_size: int = 500, force_merovingian: bool = Fals
                 question = curiosity_engine.evaluate_cluster_for_curiosity(cluster_payloads)
                 if question:
                     print(f"Curiosity Triggered! Twin asks: {question}")
-                    # In a real system, this would be pushed to a 'Curiosity Stream' cache 
-                    # for the UI to pick up and display to the human operator.
+                    # Push to UI Stream
                     if cache:
                         cache.client.xadd("omnitwin:curiosity:stream", {"question": question, "related_concept_id": sem_id})
+                    
+                    # Exponential Growth: Immediately dispatch seekers to resolve the gap
+                    seeker.dispatch_seekers(question)
                         
             synthesized_count += 1
             
     return f"Reflection complete. Synthesized {synthesized_count} abstract concepts from episodic clusters."
+
+@celery_app.task(name="maintenance.exponential_growth_cycle")
+def exponential_growth_cycle():
+    """
+    Runs background intelligence acceleration processes.
+    - Synthetic Self-Play (Internal data generation)
+    - Cross-Domain Pollination (Hidden correlation mapping)
+    """
+    init_interfaces()
+    print("Initiating Exponential Growth Cycle...")
+    
+    # Run Self-Play
+    self_play.execute_self_play()
+    
+    # Run Epiphany Pollinator
+    epiphanies = pollinator.run_pollination_cycle()
+    if epiphanies > 0 and cache:
+        cache.client.incrby("omnitwin:metrics:epiphanies", epiphanies)
+        
+    return f"Growth cycle complete. {epiphanies} epiphanies mapped."

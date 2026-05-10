@@ -72,6 +72,16 @@ async def get_system_state():
     ce.tick()
     state_summary = se.get_state_summary()
     
+    # Fetch Exponential Growth Metrics
+    try:
+        self_play_count = int(get_cache().client.get("omnitwin:metrics:self_play_count") or 0)
+        epiphanies = int(get_cache().client.get("omnitwin:metrics:epiphanies") or 0)
+        seeker_dispatches = int(get_cache().client.get("omnitwin:metrics:seeker_dispatches") or 0)
+    except:
+        self_play_count = 0
+        epiphanies = 0
+        seeker_dispatches = 0
+    
     return {
         "status": "online",
         "cache_length": cache_len,
@@ -81,7 +91,12 @@ async def get_system_state():
         "avg_fractal_depth": round(avg_depth, 2),
         "emotional_state": state_summary,
         "biological_state": ce.state,
-        "energy": round(ce.energy, 1)
+        "energy": round(ce.energy, 1),
+        "exponential_metrics": {
+            "self_play_count": self_play_count,
+            "epiphanies": epiphanies,
+            "seeker_dispatches": seeker_dispatches
+        }
     }
 
 @router.post("/maintenance/nemesis")
@@ -90,6 +105,15 @@ async def trigger_nemesis_strike():
         from src.maintenance.tasks import trigger_nemesis
         trigger_nemesis.delay()
         return {"status": "success", "message": "Nemesis strike triggered."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@router.post("/maintenance/growth")
+async def trigger_exponential_growth():
+    try:
+        from src.maintenance.tasks import exponential_growth_cycle
+        exponential_growth_cycle.delay()
+        return {"status": "success", "message": "Exponential Growth cycle (Self-Play & Pollination) triggered."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

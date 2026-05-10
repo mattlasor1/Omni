@@ -45,6 +45,14 @@
                <span style="font-size:0.8em;">(Merovingian Shifts: <span id="mero-shifts">0</span>)</span></p>
             <p>Biological State: <span style="font-weight:bold; color: #8e44ad;" id="biological-state">...</span> (Energy: <span id="state-energy">...</span>%)</p>
             <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span></p>
+            <hr>
+            <p style="font-size: 0.9em; margin-bottom: 5px;"><strong>Exponential Growth Metrics</strong></p>
+            <div style="font-size: 0.8em; display: flex; justify-content: space-between;">
+                <span>Synthetic Rehearsals: <span id="metric-selfplay">0</span></span>
+                <span>Tensor Epiphanies: <span id="metric-epiphanies">0</span></span>
+                <span>Seeker Dispatches: <span id="metric-seekers">0</span></span>
+            </div>
+            <button onclick="triggerGrowth()" style="background-color: #27ae60; width: 100%; margin-top: 15px;">Run Exponential Growth Cycle</button>
             <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Force Sleep / Autonomous Reflection (Dream)</button>
             <button onclick="triggerNemesis()" style="background-color: #c0392b; width: 100%; margin-top: 10px;">Force Adversarial Nemesis Strike</button>
             <br>
@@ -180,6 +188,11 @@
                 document.getElementById('biological-state').innerText = data.biological_state;
                 document.getElementById('state-energy').innerText = data.energy;
                 
+                // Map Exponential Metrics
+                document.getElementById('metric-selfplay').innerText = data.exponential_metrics.self_play_count;
+                document.getElementById('metric-epiphanies').innerText = data.exponential_metrics.epiphanies;
+                document.getElementById('metric-seekers').innerText = data.exponential_metrics.seeker_dispatches;
+                
             } catch (e) {
                 document.getElementById('status').innerText = 'Status: Disconnected';
                 document.getElementById('status').style.color = '#e74c3c';
@@ -248,6 +261,17 @@
                 logMsg(data.message);
             } catch (e) {
                 logMsg("Failed to trigger Nemesis.");
+            }
+        }
+
+        async function triggerGrowth() {
+            logMsg("Initiating Exponential Growth Cycle (Self-Play & Pollination)...");
+            try {
+                const res = await fetch('/api/v1/maintenance/growth', { method: 'POST' });
+                const data = await res.json();
+                logMsg(data.message);
+            } catch (e) {
+                logMsg("Failed to trigger Growth Cycle.");
             }
         }
 
