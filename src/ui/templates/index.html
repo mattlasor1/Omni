@@ -36,6 +36,10 @@
         <!-- Memory State -->
         <div class="card">
             <h2>Core Metrics & State</h2>
+            <div style="background: #2c3e50; color: white; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+                <strong>Prime Directive (Teleology):</strong><br>
+                <span id="prime-directive" style="font-size: 0.9em; font-style: italic;">Awaiting formulation...</span>
+            </div>
             <p>Episodic Memory (Events): <span class="stats" id="episodic-count">Loading...</span></p>
             <p>Semantic Memory (Concepts): <span class="stats" id="semantic-count">Loading...</span></p>
             <p style="font-size: 0.9em; margin-top: -10px;">Avg Fractal Depth: <span id="avg-depth">...</span> | Epistemic Uncertainty: <span id="avg-unc">...</span></p>
@@ -46,19 +50,29 @@
             <p>Biological State: <span style="font-weight:bold; color: #8e44ad;" id="biological-state">...</span> (Energy: <span id="state-energy">...</span>%)</p>
             <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span></p>
             <hr>
-            <p style="font-size: 0.9em; margin-bottom: 5px;"><strong>Exponential Growth Metrics</strong></p>
-            <div style="font-size: 0.8em; display: flex; justify-content: space-between;">
-                <span>Synthetic Rehearsals: <span id="metric-selfplay">0</span></span>
-                <span>Tensor Epiphanies: <span id="metric-epiphanies">0</span></span>
-                <span>Seeker Dispatches: <span id="metric-seekers">0</span></span>
+            <p style="font-size: 0.9em; margin-bottom: 5px;"><strong>Exponential Growth & Optimization</strong></p>
+            <div style="font-size: 0.8em; display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Synthetic Rehearsals: <span id="metric-selfplay">0</span></span>
+                    <span>Tensor Epiphanies: <span id="metric-epiphanies">0</span></span>
+                    <span>Seeker Dispatches: <span id="metric-seekers">0</span></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; color: #27ae60;">
+                    <span>Nodes Pruned via Axiomatic Compression: <span id="metric-axioms">0</span></span>
+                </div>
             </div>
             <hr>
             <p style="font-size: 0.9em; margin-bottom: 5px;"><strong>Philosophical Engines</strong></p>
-            <div style="font-size: 0.8em; display: flex; justify-content: space-between;">
-                <span>Thalamic Subconscious Filter: <span id="metric-thalamic">0</span>% blocked</span>
-                <span>Synaptic Memories Pruned: <span id="metric-pruned">0</span></span>
+            <div style="font-size: 0.8em; display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Thalamic Subconscious Filter: <span id="metric-thalamic">0</span>% blocked</span>
+                    <span>Synaptic Memories Pruned: <span id="metric-pruned">0</span></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; color: #c0392b;">
+                    <span>Unsolvable Moral Crises Overridden via Theodicy (Agape): <span id="metric-theodicy">0</span></span>
+                </div>
             </div>
-            <button onclick="triggerGrowth()" style="background-color: #27ae60; width: 100%; margin-top: 15px;">Run Exponential Growth Cycle</button>
+            <button onclick="triggerGrowth()" style="background-color: #27ae60; width: 100%; margin-top: 15px;">Run Exponential Growth & Teleology Cycle</button>
             <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Force Sleep / Autonomous Reflection (Dream)</button>
             <button onclick="triggerNemesis()" style="background-color: #c0392b; width: 100%; margin-top: 10px;">Force Adversarial Nemesis Strike</button>
             <br>
@@ -224,6 +238,8 @@
                 document.getElementById('status').innerText = 'Status: Active';
                 document.getElementById('status').style.color = '#2ecc71';
                 
+                document.getElementById('prime-directive').innerText = data.prime_directive || "Awaiting formulation...";
+                
                 // Fetch Swarm
                 const swarmRes = await fetch('/api/v1/swarm/status');
                 const swarmData = await swarmRes.json();
@@ -241,10 +257,12 @@
                 document.getElementById('metric-selfplay').innerText = data.exponential_metrics.self_play_count;
                 document.getElementById('metric-epiphanies').innerText = data.exponential_metrics.epiphanies;
                 document.getElementById('metric-seekers').innerText = data.exponential_metrics.seeker_dispatches;
+                document.getElementById('metric-axioms').innerText = data.exponential_metrics.axioms_compressed;
                 
                 // Map Philosophical Metrics
                 document.getElementById('metric-thalamic').innerText = data.philosophical_metrics.thalamic_ratio;
                 document.getElementById('metric-pruned').innerText = data.philosophical_metrics.pruned_count;
+                document.getElementById('metric-theodicy').innerText = data.philosophical_metrics.theodicy_resolutions;
                 
             } catch (e) {
                 document.getElementById('status').innerText = 'Status: Disconnected';

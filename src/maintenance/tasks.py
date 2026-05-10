@@ -21,6 +21,8 @@ from src.ingestion.thalamus import ThalamicGate
 from src.maintenance.entropy import SynapticEntropyEngine
 from src.memory.archetypes import CollectiveUnconscious
 from src.generation.logos import LogosEngine
+from src.learning.teleology import TeleologicalEngine
+from src.maintenance.axioms import AxiomaticCompressionEngine
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
@@ -48,9 +50,11 @@ thalamus = None
 entropy = None
 unconscious = None
 logos = None
+teleology = None
+axioms = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker, thalamus, entropy, unconscious, logos
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker, thalamus, entropy, unconscious, logos, teleology, axioms
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -71,6 +75,8 @@ def init_interfaces():
         entropy = SynapticEntropyEngine(wiki, graph, bayesian_engine)
         unconscious = CollectiveUnconscious(wiki, extractor)
         logos = LogosEngine(reasoning_engine, wiki, state_engine)
+        teleology = TeleologicalEngine(reasoning_engine, wiki)
+        axioms = AxiomaticCompressionEngine(graph, wiki, reasoning_engine, extractor)
         
         # Seed archetypes on boot
         unconscious.seed_unconscious()
@@ -278,28 +284,40 @@ def exponential_growth_cycle():
     Runs background intelligence acceleration processes.
     - Synthetic Self-Play (Internal data generation)
     - Cross-Domain Pollination (Hidden correlation mapping)
+    - Axiomatic Compression (Graph optimization)
+    - Teleological Will Formulation
     """
     init_interfaces()
     print("Initiating Exponential Growth Cycle...")
     
-    # Run Self-Play
+    # 1. Update Teleological Prime Directive based on current state
+    directive = teleology.formulate_prime_directive()
+    if cache:
+        cache.client.set("omnitwin:metrics:prime_directive", directive)
+    
+    # 2. Run Self-Play
     self_play.execute_self_play()
     
-    # Run Epiphany Pollinator
+    # 3. Run Epiphany Pollinator
     epiphanies = pollinator.run_pollination_cycle()
     if epiphanies > 0 and cache:
         cache.client.incrby("omnitwin:metrics:epiphanies", epiphanies)
         
-    # The Divine Spark: Check if we should publish to Logos
+    # 4. Axiomatic Compression (Optimize the Graph)
+    nodes_pruned = axioms.compress_chains()
+    if nodes_pruned > 0 and cache:
+        cache.client.incrby("omnitwin:metrics:axioms_compressed", nodes_pruned)
+        
+    # 5. The Divine Spark: Check if we should publish to Logos
     insight = logos.check_and_publish(epiphanies)
     if insight and cache:
         cache.client.xadd("omnitwin:logos:stream", {"insight": insight})
         
-    # Synaptic Pruning (The Art of Forgetting)
+    # 6. Synaptic Pruning (The Art of Forgetting)
     # Only run during sleep or very low processing to preserve resources
     if circadian_engine.state == "ASLEEP":
         prune_stats = entropy.prune_memories()
         if cache:
             cache.client.incrby("omnitwin:metrics:memories_pruned", prune_stats["pruned"])
         
-    return f"Growth cycle complete. {epiphanies} epiphanies mapped."
+    return f"Growth cycle complete. {epiphanies} epiphanies, {nodes_pruned} axioms."

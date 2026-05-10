@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from src.learning.reasoning import CognitiveReasoningEngine
 from src.learning.somatic import SomaticMarkerEngine
 from src.learning.morality import MoralAlignmentMatrix
+from src.learning.theodicy import TheodicyEngine
 import random
 
 class MultiTimelineMCTS:
@@ -15,6 +16,7 @@ class MultiTimelineMCTS:
         self.reasoning = reasoning
         self.somatic = somatic
         self.morality = morality
+        self.theodicy = TheodicyEngine(reasoning)
         self.num_simulations = 3 # Kept low for prototype speed
 
     def find_golden_path(self, base_action: Dict[str, Any], context_points: list) -> Dict[str, Any]:
@@ -71,6 +73,11 @@ class MultiTimelineMCTS:
 
         # Select the 'Golden Path' (Highest Score)
         golden_path = max(timelines, key=lambda x: x["score"])
+        
+        # Theodicy Check: If the BEST possible timeline is still morally negative, 
+        # we have hit an unavoidable Moral Crisis (e.g., Trolley Problem).
+        if golden_path["score"] < -0.5:
+            return self.theodicy.resolve_moral_crisis(action_name, context_points, timelines)
         
         proceed = golden_path["score"] > -0.5 # Strict Veto threshold
         
