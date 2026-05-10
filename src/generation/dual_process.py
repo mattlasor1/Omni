@@ -55,15 +55,11 @@ class DualProcessRouter:
         )
 
         try:
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": f"You are a digital twin responding to a user. {tom_instruction}"},
-                    {"role": "user", "content": prompt}
-                ],
+            return self.reasoning._generate_generic(
+                system_prompt=f"You are a digital twin responding to a user. {tom_instruction}",
+                user_prompt=prompt,
                 max_tokens=300,
                 temperature=0.7
             )
-            return response.choices[0].message.content
         except Exception as e:
             return f"System 2 Error: {e}"

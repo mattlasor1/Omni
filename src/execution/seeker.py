@@ -32,14 +32,14 @@ class SeekerSwarm:
         )
         
         try:
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
+            fetched_context = self.reasoning._generate_generic(
+                system_prompt="You are an active context-fetching agent.",
+                user_prompt=prompt,
                 max_tokens=250,
                 temperature=0.2
             )
             
-            fetched_context = response.choices[0].message.content
+            if not fetched_context: return False
             
             # Flood the cache with the retrieved context
             if self.cache:

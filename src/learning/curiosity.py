@@ -33,16 +33,12 @@ class CuriosityEngine:
             prompt += f"{i+1}. {c}\n"
             
         try:
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a proactive curiosity engine. Ask one clarifying question based on incomplete observations."},
-                    {"role": "user", "content": prompt}
-                ],
+            question = self.reasoning._generate_generic(
+                system_prompt="You are a proactive curiosity engine. Ask one clarifying question based on incomplete observations.",
+                user_prompt=prompt,
                 max_tokens=100,
                 temperature=0.8 # Higher temp for more creative/exploratory questions
             )
-            question = response.choices[0].message.content
             return question
         except Exception as e:
             print(f"Curiosity formulation failed: {e}")

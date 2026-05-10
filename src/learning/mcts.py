@@ -42,13 +42,12 @@ class MultiTimelineMCTS:
             )
             
             try:
-                response = self.reasoning.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
+                outcome = self.reasoning._generate_generic(
+                    system_prompt="Simulate the outcome of an action based on context.",
+                    user_prompt=prompt,
                     max_tokens=100,
                     temperature=0.7 # High temp to force branching realities
                 )
-                outcome = response.choices[0].message.content
                 
                 # Score the timeline
                 # 1. Somatic evaluation (does the context feel safe?)

@@ -33,13 +33,12 @@ class TheoryOfMindEngine:
         )
 
         try:
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
+            tom_instruction = self.reasoning._generate_generic(
+                system_prompt="You model user knowledge based on interaction history.",
+                user_prompt=prompt,
                 max_tokens=100,
                 temperature=0.3
             )
-            tom_instruction = response.choices[0].message.content
             print(f"THEORY OF MIND: {tom_instruction}")
             return tom_instruction
         except Exception:

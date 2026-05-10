@@ -52,18 +52,16 @@ class SyntheticRehearsalEngine:
                 print("SELF-PLAY: Cognitive reasoning offline.")
                 return False
 
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You generate synthetic training data by colliding concepts."},
-                    {"role": "user", "content": prompt}
-                ],
+            synthetic_observation = self.reasoning._generate_generic(
+                system_prompt="You generate synthetic training data by colliding concepts.",
+                user_prompt=prompt,
                 max_tokens=200,
                 temperature=0.8
             )
             
-            synthetic_observation = response.choices[0].message.content
-            
+            if not synthetic_observation:
+                return False
+                
             # Feed the synthetic observation into the episodic cache
             if self.cache:
                 self.cache.add_to_stream({

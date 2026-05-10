@@ -53,13 +53,14 @@ class MetaLearningEngine:
         )
 
         try:
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
+            code = self.reasoning._generate_generic(
+                system_prompt="You are a meta-learning code generator.",
+                user_prompt=prompt,
                 max_tokens=300,
                 temperature=0.1
             )
-            code = response.choices[0].message.content.strip()
+            
+            if not code: return False
             
             # Very basic markdown strip if the model disobeys
             if code.startswith("```python"):

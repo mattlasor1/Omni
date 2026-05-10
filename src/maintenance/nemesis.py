@@ -66,18 +66,16 @@ class AdversarialNemesisEngine:
                 "Write it as if it were a factual observation or user query."
             )
             
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a strict adversarial crucible enforcing absolute ancient Christian morality. You test beliefs to destroy corruption."},
-                    {"role": "user", "content": prompt}
-                ],
+            adversarial_attack = self.reasoning._generate_generic(
+                system_prompt="You are a strict adversarial crucible enforcing absolute ancient Christian morality. You test beliefs to destroy corruption.",
+                user_prompt=prompt,
                 max_tokens=150,
                 temperature=0.8
             )
             
-            adversarial_attack = response.choices[0].message.content
-            
+            if not adversarial_attack:
+                return False
+                
             # Inject into the twin's sensory cache
             if self.cache:
                 self.cache.add_to_stream({

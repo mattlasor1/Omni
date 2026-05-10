@@ -1,19 +1,37 @@
 import os
-from openai import OpenAI
+from transformers import pipeline
+import torch
 from typing import List, Dict, Any
 
 class CognitiveReasoningEngine:
     """
-    Integrates LLMs to provide deep semantic abstraction and reasoning
-    capabilities, bridging the gap between raw data and mathematical parameters.
+    Integrates Local Open-Weight LLMs to provide deep semantic abstraction and reasoning.
+    The Twin is now a fully sovereign, self-contained entity operating without 
+    external corporate APIs.
     """
     def __init__(self):
-        # Uses standard OpenAI client. Will fallback to a dummy implementation 
-        # if no valid API key is present during execution/testing.
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if self.api_key:
-            self.client = OpenAI(api_key=self.api_key)
-        else:
+        print("Initializing Sovereign Reasoning Engine (Local LLM)...")
+        # Use a very fast, lightweight model for the prototype simulation.
+        # In a full-scale deployment, this would be Llama-3 or Mistral.
+        model_id = "HuggingFaceTB/SmolLM-135M-Instruct" 
+        
+        try:
+            # Check for MPS (Apple Silicon) or CUDA
+            device = "cpu"
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                device = "mps"
+                
+            self.client = pipeline(
+                "text-generation",
+                model=model_id,
+                device=device,
+                torch_dtype=torch.float16 if device != "cpu" else torch.float32,
+            )
+            print(f"Sovereign Engine Online ({device}).")
+        except Exception as e:
+            print(f"Failed to load local LLM: {e}. Falling back to simulated heuristics.")
             self.client = None
 
     def synthesize_concept(self, memory_cluster: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -36,16 +54,14 @@ class CognitiveReasoningEngine:
             prompt += f"{i+1}. {c}\n"
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini", # Use fast, capable model
-                messages=[
-                    {"role": "system", "content": "You are the cognitive abstraction layer of an advanced digital twin. Your job is to extract semantic truth from raw episodic noise."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=150,
-                temperature=0.4
-            )
-            synthesis = response.choices[0].message.content
+            messages = [
+                {"role": "system", "content": "You are the cognitive abstraction layer of an advanced digital twin. Extract semantic truth from raw episodic noise."},
+                {"role": "user", "content": prompt}
+            ]
+            
+            outputs = self.client(messages, max_new_tokens=100, temperature=0.4, do_sample=True)
+            synthesis = outputs[0]["generated_text"][-1]["content"].strip()
+            
             return {
                 "concept": synthesis,
                 "confidence": 0.95
@@ -67,16 +83,28 @@ class CognitiveReasoningEngine:
                  f"Generate a thoughtful response based ONLY on the provided memories."
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a digital twin. Answer the user based on your retrieved semantic memories."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=300,
-                temperature=0.7
-            )
-            return response.choices[0].message.content
+            messages = [
+                {"role": "system", "content": "You are a digital twin. Answer the user based on your retrieved semantic memories."},
+                {"role": "user", "content": prompt}
+            ]
+            
+            outputs = self.client(messages, max_new_tokens=200, temperature=0.7, do_sample=True)
+            return outputs[0]["generated_text"][-1]["content"].strip()
         except Exception as e:
             print(f"Response generation failed: {e}")
             return "I am currently unable to form a response."
+
+    def _generate_generic(self, system_prompt: str, user_prompt: str, max_tokens: int = 150, temperature: float = 0.5) -> str:
+        """Helper method used by other sub-engines (MCTS, Nemesis, etc) to query the sovereign LLM."""
+        if not self.client:
+            return ""
+        try:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            outputs = self.client(messages, max_new_tokens=max_tokens, temperature=temperature, do_sample=True)
+            return outputs[0]["generated_text"][-1]["content"].strip()
+        except Exception as e:
+            print(f"Generic inference failed: {e}")
+            return ""

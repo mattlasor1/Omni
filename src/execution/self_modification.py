@@ -54,13 +54,14 @@ class RecursiveSelfModificationEngine:
         )
 
         try:
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o", # Must use smartest model for coding
-                messages=[{"role": "user", "content": prompt}],
+            new_code = self.reasoning._generate_generic(
+                system_prompt="You are a recursive self-improvement engine.",
+                user_prompt=prompt,
+                max_tokens=1000,
                 temperature=0.1
             )
             
-            new_code = response.choices[0].message.content.strip()
+            if not new_code: return False
             
             # Strip markdown if present
             if new_code.startswith("```python"):

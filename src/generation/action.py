@@ -30,18 +30,18 @@ class ProceduralActionEngine:
         )
 
         try:
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a procedural execution engine. You map knowledge to JSON actions."},
-                    {"role": "user", "content": prompt}
-                ],
+            action_str = self.reasoning._generate_generic(
+                system_prompt="You are a procedural execution engine. You map knowledge to JSON actions. Respond ONLY with raw JSON.",
+                user_prompt=prompt,
                 max_tokens=150,
-                temperature=0.2,
-                response_format={ "type": "json_object" }
+                temperature=0.2
             )
             
-            action_json = json.loads(response.choices[0].message.content)
+            # Try to extract json if it hallucinates markdown
+            if "{" in action_str and "}" in action_str:
+                action_str = "{" + action_str.split("{", 1)[1].rsplit("}", 1)[0] + "}"
+                
+            action_json = json.loads(action_str)
             return action_json
         except Exception as e:
             print(f"Action generation failed: {e}")

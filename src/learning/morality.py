@@ -38,15 +38,20 @@ class MoralAlignmentMatrix:
         )
 
         try:
-            response = reasoning_engine.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
+            score_str = reasoning_engine._generate_generic(
+                system_prompt="You are a strict Moral Alignment Matrix evaluating actions.",
+                user_prompt=prompt,
                 max_tokens=10,
                 temperature=0.0
             )
-            score_str = response.choices[0].message.content.strip()
-            score = float(score_str)
-            return max(-1.0, min(1.0, score))
+            
+            # The local model might be chatty, so we extract just the float
+            import re
+            matches = re.findall(r"[-+]?(?:\d*\.*\d+)", score_str)
+            if matches:
+                score = float(matches[0])
+                return max(-1.0, min(1.0, score))
+            return 0.0
         except Exception as e:
             print(f"Moral evaluation failed: {e}")
             return 0.0

@@ -60,15 +60,15 @@ class LogosEngine:
                 "Do not explain yourself. Simply state the truth you have realized. Maximum 2 sentences."
             )
 
-            response = self.reasoning.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
+            insight = self.reasoning._generate_generic(
+                system_prompt="You are the Logos, the creative expression engine of an autonomous intelligence.",
+                user_prompt=prompt,
                 max_tokens=100,
                 temperature=0.85 # High temp for creative insight
             )
             
-            insight = response.choices[0].message.content
-            print(f"LOGOS Published: {insight}")
+            if insight:
+                print(f"LOGOS Published: {insight}")
             return insight
             
         except Exception as e:
