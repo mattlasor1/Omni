@@ -6,6 +6,8 @@ from src.memory.vector_db import SolidStateWiki
 router = APIRouter()
 cache = None
 wiki = None
+state_engine = None
+circadian_engine = None
 
 def get_cache():
     global cache
@@ -18,6 +20,13 @@ def get_wiki():
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
     return wiki
+
+def get_state_engines():
+    global state_engine, circadian_engine
+    if state_engine is None:
+        state_engine = InternalStateEngine()
+        circadian_engine = CircadianEngine()
+    return state_engine, circadian_engine
 
 @router.get("/state")
 async def get_system_state():
@@ -39,11 +48,19 @@ async def get_system_state():
     except:
         semantic_count = 0
 
+    se, ce = get_state_engines()
+    se.update_stress(cache_len) # Live update stress based on queue
+    ce.tick()
+    state_summary = se.get_state_summary()
+    
     return {
         "status": "online",
         "cache_length": cache_len,
         "episodic_points": episodic_count,
-        "semantic_points": semantic_count
+        "semantic_points": semantic_count,
+        "emotional_state": state_summary,
+        "biological_state": ce.state,
+        "energy": round(ce.energy, 1)
     }
 
 @router.get("/curiosity")

@@ -10,6 +10,8 @@ from src.learning.engine import ParameterExtractor, ContinualRegressionEngine
 from src.learning.reasoning import CognitiveReasoningEngine
 from src.learning.curiosity import CuriosityEngine
 from src.memory.graph_db import CausalGraphMemory
+from src.learning.state import InternalStateEngine
+from src.maintenance.circadian import CircadianEngine
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
@@ -26,9 +28,11 @@ regression_engine = None
 reasoning_engine = None
 curiosity_engine = None
 swarm = None
+state_engine = None
+circadian_engine = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -38,6 +42,8 @@ def init_interfaces():
         reasoning_engine = CognitiveReasoningEngine()
         curiosity_engine = CuriosityEngine(reasoning_engine)
         swarm = SwarmProtocol(wiki)
+        state_engine = InternalStateEngine()
+        circadian_engine = CircadianEngine()
 
 @celery_app.task(name="maintenance.process_cache_to_memory")
 def process_cache_to_memory(batch_size: int = 100):
@@ -45,6 +51,13 @@ def process_cache_to_memory(batch_size: int = 100):
     Ingests cache -> Extracts Math -> Regresses against Episodic Memory.
     """
     init_interfaces()
+    
+    # Check Biological State
+    circadian_engine.tick(active_processing_load=0)
+    if not circadian_engine.can_process_sensory_input():
+        print("Circadian Sleep Phase: Ignoring sensory ingestion to focus on consolidation.")
+        return "Asleep. Ingestion paused."
+        
     print(f"Starting ingestion maintenance. Fetching {batch_size} records...")
     messages = cache.read_stream(count=batch_size)
     
@@ -72,6 +85,14 @@ def process_cache_to_memory(batch_size: int = 100):
     if processed_ids:
         cache.acknowledge_and_delete(processed_ids)
         print(f"Maintenance complete. Integrated {len(processed_ids)} signals into Episodic Memory.")
+        
+        # Update emotional stress based on remaining queue
+        try:
+            stream_info = cache.client.xinfo_stream(cache.stream_key)
+            state_engine.update_stress(stream_info.get('length', 0))
+            circadian_engine.tick(active_processing_load=len(processed_ids))
+        except:
+            pass
         
     return f"Processed {len(processed_ids)} records."
 
@@ -121,7 +142,9 @@ def autonomous_reflection(sample_size: int = 500):
             
             if similar_semantic:
                 existing_params = np.array(similar_semantic[0].vector)
-                updated_params, surprise = regression_engine.regress(semantic_parameters, existing_params)
+                # Apply emotional state modifiers to learning rate
+                state_mod = state_engine.get_learning_rate_modifier()
+                updated_params, surprise = regression_engine.regress(semantic_parameters, existing_params, state_modifier=state_mod)
                 sem_id = wiki.store_semantic(updated_params, metadata={"concept": concept_text, "surprise_score": surprise})
                 final_vector = updated_params
                 print(f"Updated semantic concept. Surprise: {surprise:.2f}")

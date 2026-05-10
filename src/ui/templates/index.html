@@ -39,10 +39,12 @@
             <p>Episodic Memory (Events): <span class="stats" id="episodic-count">Loading...</span></p>
             <p>Semantic Memory (Concepts): <span class="stats" id="semantic-count">Loading...</span></p>
             <hr>
-            <p>Internal Stress: <span style="font-weight:bold" id="state-stress">...</span></p>
-            <p>Internal Arousal: <span style="font-weight:bold" id="state-arousal">...</span></p>
+            <p>Internal Stress: <span style="font-weight:bold" id="state-stress">...</span> | Arousal: <span style="font-weight:bold" id="state-arousal">...</span></p>
+            <p>Biological State: <span style="font-weight:bold; color: #8e44ad;" id="biological-state">...</span> (Energy: <span id="state-energy">...</span>%)</p>
             <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span></p>
-            <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Trigger Autonomous Reflection (Dream)</button>
+            <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Force Sleep / Autonomous Reflection (Dream)</button>
+            <br>
+            <p style="font-size: 0.8em; margin-top: 10px;"><i>Note: Twin can dynamically evolve new execution actions via LLM Meta-Learning when autonomous execution is enabled.</i></p>
         </div>
 
         <!-- Ingestion Simulation -->
@@ -164,11 +166,11 @@
                 const swarmData = await swarmRes.json();
                 document.getElementById('swarm-peers').innerText = swarmData.peers.length;
                 
-                // Simulate state metrics based on queue for demo
-                const stress = Math.min(data.cache_length / 100, 1.0).toFixed(2);
-                document.getElementById('state-stress').innerText = stress;
-                // Arousal random walk for demo
-                document.getElementById('state-arousal').innerText = (Math.random() * 0.5 + 0.2).toFixed(2);
+                // Map real emotional/biological states
+                document.getElementById('state-stress').innerText = data.emotional_state.stress;
+                document.getElementById('state-arousal').innerText = data.emotional_state.arousal;
+                document.getElementById('biological-state').innerText = data.biological_state;
+                document.getElementById('state-energy').innerText = data.energy;
                 
             } catch (e) {
                 document.getElementById('status').innerText = 'Status: Disconnected';

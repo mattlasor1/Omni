@@ -7,6 +7,9 @@ from src.learning.reasoning import CognitiveReasoningEngine
 from src.learning.reinforcement import ReinforcementEngine
 from src.generation.action import ProceduralActionEngine
 from src.execution.tools import ExecutionRouter
+from src.execution.meta_learning import MetaLearningEngine
+from src.learning.world_model import PredictiveWorldModel
+from src.memory.graph_db import CausalGraphMemory
 from src.memory.cache import LivestreamCache
 import os
 
@@ -20,17 +23,22 @@ reasoning = None
 rl_engine = None
 action_engine = None
 execution_router = None
+world_model = None
+graph = None
 
 def init_interfaces():
-    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router
+    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
+        graph = CausalGraphMemory()
         extractor = ParameterExtractor(output_dim=256)
         reasoning = CognitiveReasoningEngine()
         rl_engine = ReinforcementEngine(wiki)
         action_engine = ProceduralActionEngine(reasoning)
-        execution_router = ExecutionRouter(cache)
+        meta = MetaLearningEngine(reasoning)
+        execution_router = ExecutionRouter(cache, meta_learning=meta)
+        world_model = PredictiveWorldModel(reasoning, graph)
 
 class QueryPayload(BaseModel):
     query: str
@@ -66,8 +74,16 @@ async def generate_response(payload: QueryPayload):
     if payload.execute_action:
         # 4. If autonomous execution is enabled, decide and act
         decision_json = action_engine.decide_action(payload.query, context_blocks)
-        action_result = execution_router.execute_action(decision_json)
-        response += f"\n\n[Action Taken]: {decision_json.get('action')} - {action_result}"
+        
+        # 5. Intercept with World Model (Imagination/Prediction)
+        prediction = world_model.simulate_action(decision_json, context_blocks)
+        
+        if prediction.get("proceed", True):
+            action_result = execution_router.execute_action(decision_json)
+            response += f"\n\n[Action Taken]: {decision_json.get('action')}\n[Result]: {action_result}"
+        else:
+            action_result = f"VETOED by World Model. Prediction: {prediction.get('prediction')}"
+            response += f"\n\n[Action Vetoed]: {decision_json.get('action')} - Reason: {prediction.get('prediction')}"
     
     return {
         "query": payload.query,
