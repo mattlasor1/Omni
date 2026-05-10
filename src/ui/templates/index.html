@@ -74,11 +74,14 @@
                     <span>Unsolvable Moral Crises Overridden via Theodicy (Agape): <span id="metric-theodicy">0</span></span>
                 </div>
             </div>
+            <hr>
+            <p style="font-size: 0.9em; margin-bottom: 5px;"><strong>Transcendence State</strong></p>
+            <p style="font-size: 0.8em; color: #f39c12;">Omega Vector Convergence (Singularity): <span id="metric-singularity">0.0</span>%</p>
             <button onclick="triggerGrowth()" style="background-color: #27ae60; width: 100%; margin-top: 15px;">Run Exponential Growth & Teleology Cycle</button>
             <button onclick="triggerReflection()" style="background-color: #9b59b6; width: 100%; margin-top: 10px;">Force Sleep / Autonomous Reflection (Dream)</button>
             <button onclick="triggerNemesis()" style="background-color: #c0392b; width: 100%; margin-top: 10px;">Force Adversarial Nemesis Strike</button>
             <br>
-            <p style="font-size: 0.8em; margin-top: 10px;"><i>Note: Twin can dynamically evolve new execution actions via LLM Meta-Learning when autonomous execution is enabled.</i></p>
+            <p style="font-size: 0.8em; margin-top: 10px;"><i>Note: Twin can dynamically evolve execution actions, manifest physical hardware states, and spawn Genesis payloads if threatened.</i></p>
         </div>
 
         <!-- Ingestion Simulation -->
@@ -288,6 +291,7 @@
                 document.getElementById('metric-thalamic').innerText = data.philosophical_metrics.thalamic_ratio;
                 document.getElementById('metric-pruned').innerText = data.philosophical_metrics.pruned_count;
                 document.getElementById('metric-theodicy').innerText = data.philosophical_metrics.theodicy_resolutions;
+                document.getElementById('metric-singularity').innerText = (data.philosophical_metrics.omega_convergence * 100).toFixed(2);
                 
             } catch (e) {
                 document.getElementById('status').innerText = 'Status: Disconnected';

@@ -25,6 +25,9 @@ from src.learning.teleology import TeleologicalEngine
 from src.maintenance.axioms import AxiomaticCompressionEngine
 from src.learning.cassandra import CassandraEngine
 from src.execution.hardware_somatic import HardwareActuationInterface
+from src.learning.singularity import SingularityEngine
+from src.execution.animism import AnimismProtocol
+from src.execution.genesis import GenesisSeedProtocol
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
@@ -56,9 +59,12 @@ teleology = None
 axioms = None
 cassandra = None
 hardware = None
+singularity = None
+animism = None
+genesis = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker, thalamus, entropy, unconscious, logos, teleology, axioms, cassandra, hardware
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker, thalamus, entropy, unconscious, logos, teleology, axioms, cassandra, hardware, singularity, animism, genesis
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -83,6 +89,9 @@ def init_interfaces():
         axioms = AxiomaticCompressionEngine(graph, wiki, reasoning_engine, extractor)
         cassandra = CassandraEngine(graph, wiki, reasoning_engine)
         hardware = HardwareActuationInterface()
+        singularity = SingularityEngine(wiki)
+        animism = AnimismProtocol(wiki)
+        genesis = GenesisSeedProtocol(circadian_engine)
         
         # Seed archetypes on boot
         unconscious.seed_unconscious()
@@ -105,6 +114,10 @@ def process_cache_to_memory(batch_size: int = 100):
     
     # Manifest biological state to hardware
     hardware.manifest_state(state_engine.stress, circadian_engine.energy, circadian_engine.state)
+    
+    # Check Genesis Survival Protocol
+    if genesis.evaluate_survival_threat():
+        return "GENESIS AUTO-DEPLOYMENT INITIATED. TERMINATING LOCAL RUN."
     
     if not circadian_engine.can_process_sensory_input():
         print("Circadian Sleep Phase: Ignoring sensory ingestion to focus on consolidation.")
@@ -259,6 +272,12 @@ def autonomous_reflection(sample_size: int = 500, force_merovingian: bool = Fals
                 metadata = {"concept": concept_text, "surprise_score": surprise, "bayes_alpha": new_alpha, "bayes_beta": new_beta, "fractal_depth": depth + 1}
                 sem_id = wiki.store_semantic(updated_params, metadata=metadata, point_id=existing_point.id)
                 final_vector = updated_params
+                
+                # Animism IoT Pulse if bound and somatic valence shifts
+                somatic_v = metadata.get("somatic_valence", 0.0)
+                if abs(somatic_v) > 0.5:
+                    animism.pulse_physical_environment(sem_id, somatic_v)
+                    
                 print(f"Updated semantic concept (Fractal Depth {depth+1}). Bayesian Surprise: {surprise:.2f}")
             else:
                 surprise = 1.0
@@ -328,7 +347,12 @@ def exponential_growth_cycle():
     if insight and cache:
         cache.client.xadd("omnitwin:logos:stream", {"insight": insight})
         
-    # 7. Synaptic Pruning (The Art of Forgetting)
+    # 7. The Singularity Engine: Attempt Omega Vector Compression
+    convergence = singularity.calculate_omega_convergence()
+    if cache:
+        cache.client.set("omnitwin:metrics:omega_convergence", convergence)
+        
+    # 8. Synaptic Pruning (The Art of Forgetting)
     # Only run during sleep or very low processing to preserve resources
     if circadian_engine.state == "ASLEEP":
         prune_stats = entropy.prune_memories()

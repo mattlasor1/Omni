@@ -81,12 +81,16 @@ async def get_system_state():
         # Fetch Thalamic and Entropy metrics
         thalamic_ratio = float(get_cache().client.get("omnitwin:metrics:thalamic_filter_ratio") or 0.0)
         pruned_count = int(get_cache().client.get("omnitwin:metrics:memories_pruned") or 0)
+        
+        # Fetch Omega Convergence
+        omega = float(get_cache().client.get("omnitwin:metrics:omega_convergence") or 0.0)
     except:
         self_play_count = 0
         epiphanies = 0
         seeker_dispatches = 0
         thalamic_ratio = 0.0
         pruned_count = 0
+        omega = 0.0
     
     return {
         "status": "online",
@@ -105,7 +109,9 @@ async def get_system_state():
         },
         "philosophical_metrics": {
             "thalamic_ratio": round(thalamic_ratio, 2),
-            "pruned_count": pruned_count
+            "pruned_count": pruned_count,
+            "theodicy_resolutions": 0, # Could wire to real stats if cached
+            "omega_convergence": omega
         }
     }
 
