@@ -66,6 +66,19 @@ services:
       - REDIS_HOST=omnitwin-redis
       - QDRANT_HOST=omnitwin-qdrant
 
+  # -------------------------
+  # RLHF Training Arena (UI)
+  # -------------------------
+  omnitwin-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: omnitwin-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - omnitwin-api
+
 volumes:
   redis_data:
   qdrant_data:

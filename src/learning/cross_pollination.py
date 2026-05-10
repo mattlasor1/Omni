@@ -42,8 +42,22 @@ class TensorCrossPollinator:
             normalized_vectors = np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms!=0)
             
             # 3. Compute massive Correlation Matrix (Dot Product)
-            # This is O(N^2), feasible for 500, requires ANN approximations at massive scale
-            correlation_matrix = np.dot(normalized_vectors, normalized_vectors.T)
+            # Try to use the hyper-optimized CUDA C++ extension if compiled, otherwise fallback to numpy.
+            try:
+                import torch
+                import omnitwin_csrc
+                
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                tensor_vectors = torch.from_numpy(normalized_vectors).to(device)
+                
+                if device == "cuda":
+                    corr_tensor = omnitwin_csrc.fast_correlation_matrix(tensor_vectors)
+                    correlation_matrix = corr_tensor.cpu().numpy()
+                else:
+                    correlation_matrix = np.dot(normalized_vectors, normalized_vectors.T)
+            except Exception as e:
+                # Fallback to standard numpy if CUDA extension isn't built
+                correlation_matrix = np.dot(normalized_vectors, normalized_vectors.T)
             
             epiphany_count = 0
             

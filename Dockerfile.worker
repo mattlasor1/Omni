@@ -6,16 +6,29 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Rust toolchain for PyO3
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt maturin
 
 # Pre-download models to bake into the image for faster startup
 RUN python -c "from torchvision import models; models.resnet18(weights=models.ResNet18_Weights.DEFAULT)"
 RUN python -c "from transformers import AutoTokenizer, AutoModel; AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2'); AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')"
 
 COPY src/ /app/src/
+
+# Build Rust Extension
+WORKDIR /app/src/rust_core
+RUN maturin build --release
+RUN pip install target/wheels/*.whl
+
+WORKDIR /app
+
 ENV PYTHONPATH=/app
 
 # Command to run Celery worker

@@ -32,17 +32,29 @@ class ThalamicGate:
             
             # Simulated heuristic: In a real model, we compare against a rolling baseline of noise.
             # Here, we use string entropy as a proxy for signal density.
-            char_set = set(content)
-            entropy = len(char_set) / max(len(content), 1)
-            
-            salience_score = (magnitude * 0.1) + (entropy * 0.9)
-            
-            if salience_score > dynamic_threshold:
-                self.passed_count += 1
-                return True
-            else:
-                self.filtered_count += 1
-                return False
+            # Try to use the hyper-fast Rust zero-GIL engine if compiled
+            try:
+                import omnicore
+                rust_passed = omnicore.fast_thalamic_filter(content, float(internal_arousal), float(self.salience_threshold))
+                if rust_passed:
+                    self.passed_count += 1
+                    return True
+                else:
+                    self.filtered_count += 1
+                    return False
+            except ImportError:
+                # Fallback to Python GIL implementation
+                char_set = set(content)
+                entropy = len(char_set) / max(len(content), 1)
+                
+                salience_score = (magnitude * 0.1) + (entropy * 0.9)
+                
+                if salience_score > dynamic_threshold:
+                    self.passed_count += 1
+                    return True
+                else:
+                    self.filtered_count += 1
+                    return False
                 
         except Exception as e:
             # If we can't parse it quickly, reject it to protect the system

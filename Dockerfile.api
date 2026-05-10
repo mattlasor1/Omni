@@ -2,17 +2,32 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies required for ML libraries and cv2
+# Install system dependencies required for ML libraries, Rust, and CUDA
 RUN apt-get update && apt-get install -y \
     build-essential \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Rust toolchain for PyO3
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt maturin
 
 COPY src/ /app/src/
+
+# Build Rust Extension
+WORKDIR /app/src/rust_core
+RUN maturin build --release
+RUN pip install target/wheels/*.whl
+
+WORKDIR /app
+
+# Build CUDA Extension (if applicable hardware is present during build)
+# RUN cd src/csrc && python setup.py install
 
 # Set Python path
 ENV PYTHONPATH=/app
