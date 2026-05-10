@@ -48,7 +48,9 @@
             <p>Cognitive Fixation: <span style="font-weight:bold; color: #d35400;" id="state-fixation">...</span> 
                <span style="font-size:0.8em;">(Merovingian Shifts: <span id="mero-shifts">0</span>)</span></p>
             <p>Biological State: <span style="font-weight:bold; color: #8e44ad;" id="biological-state">...</span> (Energy: <span id="state-energy">...</span>%)</p>
-            <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span></p>
+            <p>Swarm Peers Active: <span style="font-weight:bold" id="swarm-peers">...</span> 
+               <span style="font-size:0.8em;">(Entangled: <span id="swarm-entangled">0</span>)</span></p>
+            <p style="font-size:0.8em; margin-top:-10px;">Global Resonance Signature: [<span id="swarm-resonance" style="font-family:monospace;">...</span>]</p>
             <hr>
             <p style="font-size: 0.9em; margin-bottom: 5px;"><strong>Exponential Growth & Optimization</strong></p>
             <div style="font-size: 0.8em; display: flex; flex-direction: column; gap: 5px;">
@@ -102,8 +104,8 @@
                 </div>
             </div>
             <div style="flex: 1;">
-                <h2>The Logos Canvas</h2>
-                <p>Unprompted, autonomous philosophical insights:</p>
+                <h2>The Logos Canvas & Cassandra Prophecy</h2>
+                <p>Unprompted philosophy & deep-time chronological predictions:</p>
                 <div id="logos-container" style="height: 200px; overflow-y: auto;">
                     <div class="curiosity-box" style="background:#d4edda; color:#155724; border-color:#c3e6cb;">Awaiting divine resonance...</div>
                 </div>
@@ -213,7 +215,8 @@
                 const data = await res.json();
                 if (data.insights && data.insights.length > 0) {
                     const container = document.getElementById('logos-container');
-                    container.innerHTML = ''; // Clear awaiting
+                    // Remove placeholder if present
+                    if(container.innerHTML.includes("Awaiting")) container.innerHTML = ''; 
                     data.insights.forEach(i => {
                         const box = document.createElement('div');
                         box.className = 'curiosity-box';
@@ -221,7 +224,27 @@
                         box.style.color = '#155724';
                         box.style.borderColor = '#c3e6cb';
                         box.innerText = `Logos Spark: "${i}"`;
-                        container.appendChild(box);
+                        container.prepend(box);
+                    });
+                }
+            } catch (e) {}
+        }
+        
+        async function fetchProphecy() {
+            try {
+                const res = await fetch('/api/v1/prophecy');
+                const data = await res.json();
+                if (data.prophecies && data.prophecies.length > 0) {
+                    const container = document.getElementById('logos-container');
+                    if(container.innerHTML.includes("Awaiting")) container.innerHTML = '';
+                    data.prophecies.forEach(p => {
+                        const box = document.createElement('div');
+                        box.className = 'curiosity-box';
+                        box.style.background = '#e2d4ed'; // Purple tint
+                        box.style.color = '#4a1557';
+                        box.style.borderColor = '#dcc3e6';
+                        box.innerText = `Cassandra Prophecy: "${p}"`;
+                        container.prepend(box);
                     });
                 }
             } catch (e) {}
@@ -244,6 +267,8 @@
                 const swarmRes = await fetch('/api/v1/swarm/status');
                 const swarmData = await swarmRes.json();
                 document.getElementById('swarm-peers').innerText = swarmData.peers.length;
+                document.getElementById('swarm-entangled').innerText = swarmData.entangled_nodes;
+                document.getElementById('swarm-resonance').innerText = swarmData.resonance_signature.join(", ") + "...";
                 
                 // Map real emotional/biological states
                 document.getElementById('state-stress').innerText = data.emotional_state.stress;
@@ -349,6 +374,7 @@
         setInterval(fetchStats, 2000);
         setInterval(fetchCuriosity, 5000);
         setInterval(fetchLogos, 6000);
+        setInterval(fetchProphecy, 7000);
         fetchStats();
     </script>
 </body>

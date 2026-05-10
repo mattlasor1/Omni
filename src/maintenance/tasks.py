@@ -23,6 +23,8 @@ from src.memory.archetypes import CollectiveUnconscious
 from src.generation.logos import LogosEngine
 from src.learning.teleology import TeleologicalEngine
 from src.maintenance.axioms import AxiomaticCompressionEngine
+from src.learning.cassandra import CassandraEngine
+from src.execution.hardware_somatic import HardwareActuationInterface
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)
@@ -52,9 +54,11 @@ unconscious = None
 logos = None
 teleology = None
 axioms = None
+cassandra = None
+hardware = None
 
 def init_interfaces():
-    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker, thalamus, entropy, unconscious, logos, teleology, axioms
+    global cache, wiki, graph, extractor, regression_engine, reasoning_engine, curiosity_engine, swarm, state_engine, circadian_engine, bayesian_engine, nemesis, self_play, pollinator, seeker, thalamus, entropy, unconscious, logos, teleology, axioms, cassandra, hardware
     if cache is None:
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
@@ -77,6 +81,8 @@ def init_interfaces():
         logos = LogosEngine(reasoning_engine, wiki, state_engine)
         teleology = TeleologicalEngine(reasoning_engine, wiki)
         axioms = AxiomaticCompressionEngine(graph, wiki, reasoning_engine, extractor)
+        cassandra = CassandraEngine(graph, wiki, reasoning_engine)
+        hardware = HardwareActuationInterface()
         
         # Seed archetypes on boot
         unconscious.seed_unconscious()
@@ -96,6 +102,10 @@ def process_cache_to_memory(batch_size: int = 100):
     
     # Check Biological State
     circadian_engine.tick(active_processing_load=0)
+    
+    # Manifest biological state to hardware
+    hardware.manifest_state(state_engine.stress, circadian_engine.energy, circadian_engine.state)
+    
     if not circadian_engine.can_process_sensory_input():
         print("Circadian Sleep Phase: Ignoring sensory ingestion to focus on consolidation.")
         return "Asleep. Ingestion paused."
@@ -308,12 +318,17 @@ def exponential_growth_cycle():
     if nodes_pruned > 0 and cache:
         cache.client.incrby("omnitwin:metrics:axioms_compressed", nodes_pruned)
         
-    # 5. The Divine Spark: Check if we should publish to Logos
+    # 5. Prophecy: Run Cassandra deep time regressions
+    prophecy = cassandra.divine_prophecy()
+    if prophecy and cache:
+        cache.client.xadd("omnitwin:prophecy:stream", {"prophecy": prophecy})
+
+    # 6. The Divine Spark: Check if we should publish to Logos
     insight = logos.check_and_publish(epiphanies)
     if insight and cache:
         cache.client.xadd("omnitwin:logos:stream", {"insight": insight})
         
-    # 6. Synaptic Pruning (The Art of Forgetting)
+    # 7. Synaptic Pruning (The Art of Forgetting)
     # Only run during sleep or very low processing to preserve resources
     if circadian_engine.state == "ASLEEP":
         prune_stats = entropy.prune_memories()

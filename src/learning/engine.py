@@ -128,7 +128,8 @@ class ContinualRegressionEngine:
         return distance
 
     def regress(self, new_parameters: np.ndarray, existing_parameters: np.ndarray, 
-                confidence: float = 1.0, state_modifier: float = 1.0) -> tuple[np.ndarray, float]:
+                confidence: float = 1.0, state_modifier: float = 1.0, 
+                entanglement_modifier: np.ndarray = None) -> tuple[np.ndarray, float]:
         """
         Regresses the new knowledge against existing knowledge.
         Uses confidence scores and memory preservation penalties to simulate
@@ -138,6 +139,8 @@ class ContinualRegressionEngine:
             new_parameters: The newly extracted vector.
             existing_parameters: The closest existing memory vector.
             confidence: How strongly the new parameter should overwrite (e.g., source reliability).
+            state_modifier: Emotional/Biological state modifier.
+            entanglement_modifier: The subtle quantum pull of synchronized swarm peers.
         """
         # Convert to tensors for math
         new_tensor = torch.from_numpy(new_parameters)
@@ -158,6 +161,13 @@ class ContinualRegressionEngine:
         
         # Update parameters
         updated_tensor = existing_tensor + (adaptive_lr * deviation)
+        
+        # 4. Apply Quantum Entanglement (Synchronicity)
+        # If the swarm is entangled, we subtly bend the resulting parameter vector 
+        # toward the resonance frequency of the hive mind.
+        if entanglement_modifier is not None:
+            entanglement_tensor = torch.from_numpy(entanglement_modifier)
+            updated_tensor = updated_tensor + entanglement_tensor
         
         # Re-normalize
         updated_tensor = nn.functional.normalize(updated_tensor, p=2, dim=0)

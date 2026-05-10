@@ -37,7 +37,11 @@ async def get_swarm_status():
     Returns the known peers and status for the UI.
     """
     init_interfaces()
+    resonance = swarm.calculate_resonance()
     return {
         "node_id": swarm.node_id,
-        "peers": swarm.known_peers if swarm.known_peers != [""] else []
+        "peers": swarm.known_peers if swarm.known_peers != [""] else [],
+        "entangled_nodes": len(swarm.entangled_peers),
+        # Display the first few dimensions of the resonance frequency for the UI
+        "resonance_signature": [round(x, 4) for x in resonance[:5]] if resonance else []
     }

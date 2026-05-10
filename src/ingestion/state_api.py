@@ -128,6 +128,25 @@ async def get_logos_stream():
     except Exception as e:
         return {"insights": []}
 
+@router.get("/prophecy")
+async def get_prophecy_stream():
+    """
+    Fetches Cassandra deep-time predictions.
+    """
+    try:
+        messages = get_cache().client.xread({"omnitwin:prophecy:stream": "0-0"}, count=5)
+        prophecies = []
+        msg_ids = []
+        if messages:
+            for stream_name, stream_messages in messages:
+                for msg_id, payload in stream_messages:
+                    prophecies.append(payload.get("prophecy", ""))
+                    msg_ids.append(msg_id)
+            get_cache().client.xdel("omnitwin:prophecy:stream", *msg_ids)
+        return {"prophecies": prophecies}
+    except Exception as e:
+        return {"prophecies": []}
+
 @router.post("/maintenance/nemesis")
 async def trigger_nemesis_strike():
     try:
