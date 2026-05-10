@@ -11,6 +11,11 @@ from src.execution.meta_learning import MetaLearningEngine
 from src.learning.world_model import PredictiveWorldModel
 from src.memory.graph_db import CausalGraphMemory
 from src.memory.cache import LivestreamCache
+from src.learning.somatic import SomaticMarkerEngine
+from src.learning.theory_of_mind import TheoryOfMindEngine
+from src.generation.dual_process import DualProcessRouter
+from src.learning.flashbulb import FlashbulbMemoryProtocol
+from src.learning.state import InternalStateEngine
 import os
 
 router = APIRouter()
@@ -25,24 +30,35 @@ action_engine = None
 execution_router = None
 world_model = None
 graph = None
+somatic = None
+tom = None
+dual_process = None
+flashbulb = None
+state = None
 
 def init_interfaces():
-    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph
+    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, somatic, tom, dual_process, flashbulb, state
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
         graph = CausalGraphMemory()
         extractor = ParameterExtractor(output_dim=256)
         reasoning = CognitiveReasoningEngine()
-        rl_engine = ReinforcementEngine(wiki)
+        state = InternalStateEngine()
+        flashbulb = FlashbulbMemoryProtocol(wiki, state)
+        rl_engine = ReinforcementEngine(wiki, flashbulb=flashbulb)
         action_engine = ProceduralActionEngine(reasoning)
         meta = MetaLearningEngine(reasoning)
         execution_router = ExecutionRouter(cache, meta_learning=meta)
-        world_model = PredictiveWorldModel(reasoning, graph)
+        somatic = SomaticMarkerEngine(wiki)
+        world_model = PredictiveWorldModel(reasoning, graph, somatic)
+        tom = TheoryOfMindEngine(graph, reasoning)
+        dual_process = DualProcessRouter(wiki, reasoning)
 
 class QueryPayload(BaseModel):
     query: str
     execute_action: bool = False
+    user_id: str = "default_user"
 
 @router.post("/query")
 async def generate_response(payload: QueryPayload):
@@ -67,16 +83,20 @@ async def generate_response(payload: QueryPayload):
     # Extract IDs for RL feedback binding
     context_ids = [c.id for c in similar_concepts]
     
-    # 3. Generate response using LLM Reasoning Engine
-    response = reasoning.generate_response(payload.query, context_blocks)
+    # 3. Theory of Mind: Deduce audience instruction and log exposure
+    tom_instruction = tom.model_audience(payload.user_id, payload.query, similar_concepts)
+    tom.log_interaction(payload.user_id, context_ids)
+    
+    # 4. Dual-Process Generation (System 1 vs System 2)
+    response, process_used = dual_process.route_query(payload.query, similar_concepts, tom_instruction)
     
     action_result = None
     if payload.execute_action:
-        # 4. If autonomous execution is enabled, decide and act
+        # 5. If autonomous execution is enabled, decide and act
         decision_json = action_engine.decide_action(payload.query, context_blocks)
         
-        # 5. Intercept with World Model (Imagination/Prediction)
-        prediction = world_model.simulate_action(decision_json, context_blocks)
+        # 6. Intercept with World Model (Somatic Veto + Imagination/Prediction)
+        prediction = world_model.simulate_action(decision_json, similar_concepts)
         
         if prediction.get("proceed", True):
             action_result = execution_router.execute_action(decision_json)
@@ -88,6 +108,7 @@ async def generate_response(payload: QueryPayload):
     return {
         "query": payload.query,
         "response": response,
+        "process_used": process_used,
         "semantic_context_used": len(context_blocks),
         "context_ids": context_ids, # Returned so UI can send feedback to these memories
         "action_executed": action_result is not None

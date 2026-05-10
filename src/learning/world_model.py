@@ -1,32 +1,41 @@
 from typing import Dict, Any
 from src.learning.reasoning import CognitiveReasoningEngine
 from src.memory.graph_db import CausalGraphMemory
+from src.learning.somatic import SomaticMarkerEngine
 
 class PredictiveWorldModel:
     """
     The 'Mind's Eye' or Imagination of the Digital Twin.
-    Before taking an action, this engine simulates the action against the 
-    causal graph and semantic memory to predict the outcome. If the simulated
-    outcome is highly negative or illogical, it vetos the action.
+    Before taking an action, this engine evaluates the "gut feeling" via somatic markers.
+    If the gut feeling is neutral or positive, it simulates the action logically 
+    using the LLM to predict the outcome.
     """
-    def __init__(self, reasoning: CognitiveReasoningEngine, causal_graph: CausalGraphMemory):
+    def __init__(self, reasoning: CognitiveReasoningEngine, causal_graph: CausalGraphMemory, somatic: SomaticMarkerEngine):
         self.reasoning = reasoning
         self.graph = causal_graph
+        self.somatic = somatic
 
-    def simulate_action(self, action_json: Dict[str, Any], current_context: list[str]) -> Dict[str, Any]:
+    def simulate_action(self, action_json: Dict[str, Any], current_context_points: list) -> Dict[str, Any]:
         """
         Simulates an action and returns a prediction and a go/no-go decision.
+        Expects a list of Qdrant point objects to evaluate somatic markers.
         """
+        # 1. System 1 Somatic Check (Gut Feeling)
+        gut_feeling = self.somatic.evaluate_gut_feeling(current_context_points)
+        if gut_feeling < -0.5:
+            print(f"WORLD MODEL VETO: Strong negative gut feeling ({gut_feeling:.2f}). Bypassing logic.")
+            return {"proceed": False, "prediction": "Visceral somatic rejection based on past trauma/pain."}
+
         if not self.reasoning.client:
             return {"proceed": True, "prediction": "Simulation offline. Defaulting to execution."}
             
         action_name = action_json.get("action")
         reason = action_json.get("reason")
-        
         # In a real setup, we would query the CausalGraphMemory to see if this action 
         # has historically led to negative reinforcement. For the prototype, we use the LLM to 'imagine'.
         
-        context_block = "\n".join([f"- {c}" for c in current_context])
+        context_strings = [p.payload.get("concept", "") for p in current_context_points]
+        context_block = "\n".join([f"- {c}" for c in context_strings])
         
         prompt = (
             f"Current Context: {context_block}\n\n"

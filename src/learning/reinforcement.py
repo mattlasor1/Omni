@@ -1,5 +1,6 @@
 import numpy as np
 from src.memory.vector_db import SolidStateWiki
+from src.learning.flashbulb import FlashbulbMemoryProtocol
 
 class ReinforcementEngine:
     """
@@ -9,9 +10,10 @@ class ReinforcementEngine:
     Negative feedback reduces confidence/preservation, causing the memory to be
     more easily overwritten or forgotten in future regressions.
     """
-    def __init__(self, wiki_interface: SolidStateWiki):
+    def __init__(self, wiki_interface: SolidStateWiki, flashbulb: FlashbulbMemoryProtocol = None):
         self.wiki = wiki_interface
         self.learning_rate = 0.1
+        self.flashbulb = flashbulb
 
     def apply_feedback(self, memory_id: str, reward_score: float):
         """
@@ -51,6 +53,10 @@ class ReinforcementEngine:
                 payload=current_payload,
                 points=[memory_id]
             )
+            
+            # 4. Check for Flashbulb forging (Trauma/Ecstasy)
+            if self.flashbulb:
+                self.flashbulb.check_and_forge(memory_id, reward_score)
             
             print(f"RL Feedback applied. Memory {memory_id} confidence is now {new_confidence:.2f}")
             return True

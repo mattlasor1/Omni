@@ -120,11 +120,25 @@
             logBox.scrollTop = logBox.scrollHeight;
         }
 
-        function appendChat(msg, type, contextIds = []) {
+        function appendChat(msg, type, contextIds = [], processUsed = "") {
             const chatBox = document.getElementById('chat-box');
             const div = document.createElement('div');
             div.className = `msg ${type}`;
-            div.innerText = msg;
+            
+            if (processUsed) {
+                const processBadge = document.createElement('span');
+                processBadge.style.fontSize = "0.7em";
+                processBadge.style.background = processUsed === "System 1" ? "#e74c3c" : "#2980b9";
+                processBadge.style.color = "white";
+                processBadge.style.padding = "2px 4px";
+                processBadge.style.borderRadius = "3px";
+                processBadge.style.marginRight = "5px";
+                processBadge.innerText = processUsed;
+                div.appendChild(processBadge);
+            }
+            
+            const textNode = document.createTextNode(msg);
+            div.appendChild(textNode);
             
             // Add RL feedback buttons for twin responses
             if (type === 'twin' && contextIds.length > 0) {
@@ -273,7 +287,7 @@
                     body: JSON.stringify({ query: text, execute_action: executeAction })
                 });
                 const data = await res.json();
-                appendChat(data.response, 'twin', data.context_ids);
+                appendChat(data.response, 'twin', data.context_ids, data.process_used);
             } catch (e) {
                 appendChat("Error generating response.", 'twin');
             }
