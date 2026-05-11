@@ -4,12 +4,19 @@ export default function TrainingArena() {
   const [query, setQuery] = useState('');
   const [chatLog, setChatLog] = useState([]);
   const [stats, setStats] = useState(null);
+  const [graphData, setGraphData] = useState(null);
+  const [graftSource, setGraftSource] = useState('');
+  const [graftTarget, setGraftTarget] = useState('');
 
   const fetchStats = async () => {
     try {
       const res = await fetch('http://localhost:8000/api/v1/state');
       const data = await res.json();
       setStats(data);
+      
+      const graphRes = await fetch('http://localhost:8000/api/v1/coprocessing/graph');
+      const gData = await graphRes.json();
+      setGraphData(gData);
     } catch (e) {
       console.error(e);
     }
@@ -19,6 +26,22 @@ export default function TrainingArena() {
     const interval = setInterval(fetchStats, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleGraft = async () => {
+    if (!graftSource || !graftTarget) return;
+    try {
+      await fetch('http://localhost:8000/api/v1/coprocessing/graft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_id: graftSource, target_id: graftTarget })
+      });
+      alert('Neural Link Graft Successful!');
+      setGraftSource('');
+      setGraftTarget('');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const sendQuery = async () => {
     if (!query) return;
@@ -35,7 +58,7 @@ export default function TrainingArena() {
       const data = await res.json();
       setChatLog((prev) => [
         ...prev,
-        { role: 'twin', content: data.response, process: data.process_used, contextIds: data.context_ids }
+        { role: 'twin', content: data.response, process: data.process_used, contextIds: data.context_ids, mcts: data.mcts_simulation }
       ]);
     } catch (e) {
       console.error(e);
@@ -78,6 +101,13 @@ export default function TrainingArena() {
                   {msg.content}
                 </span>
                 
+                {msg.mcts && (
+                    <div style={{ marginTop: '5px', fontSize: '0.75em', background: '#2c3e50', color: '#ecf0f1', padding: '8px', borderRadius: '4px', textAlign: 'left' }}>
+                      <strong>MCTS World Model Simulation:</strong><br/>
+                      <i>{msg.mcts}</i>
+                    </div>
+                )}
+                
                 {msg.role === 'twin' && msg.contextIds && msg.contextIds.length > 0 && (
                   <div style={{ marginTop: '5px' }}>
                     <button onClick={() => sendFeedback(msg.contextIds, 1.0)} style={{ background: '#2ecc71', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginRight: '5px' }}>Approve (+1)</button>
@@ -117,6 +147,23 @@ export default function TrainingArena() {
           ) : (
             <p>Connecting to OmniCore...</p>
           )}
+          
+          <hr style={{ borderColor: '#34495e', marginTop: '20px' }}/>
+          <h2>Symbiotic Co-Processing (Neural Link)</h2>
+          <p style={{ fontSize: '0.8em', color: '#bdc3c7' }}>Manually graft causal links into the Twin's graph memory.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <input type="text" placeholder="Source Node ID" value={graftSource} onChange={e => setGraftSource(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: 'none' }} />
+            <input type="text" placeholder="Target Node ID" value={graftTarget} onChange={e => setGraftTarget(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: 'none' }} />
+            <button onClick={handleGraft} style={{ background: '#9b59b6', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', cursor: 'pointer' }}>Graft Logic</button>
+          </div>
+          
+          {graphData && (
+             <div style={{ marginTop: '20px', fontSize: '0.75em', background: '#1a252f', padding: '10px', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto' }}>
+               <strong>Live Causal Nodes:</strong>
+               {graphData.nodes.map(n => <div key={n.id} style={{ color: '#2ecc71' }}>ID: {n.id.substring(0,6)}... - {n.label}</div>)}
+             </div>
+          )}
+
         </div>
       </div>
     </div>

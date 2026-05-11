@@ -3,6 +3,7 @@ from src.learning.reasoning import CognitiveReasoningEngine
 from src.learning.somatic import SomaticMarkerEngine
 from src.learning.morality import MoralAlignmentMatrix
 from src.learning.theodicy import TheodicyEngine
+from src.learning.mirroring import EpisodicMirroringEngine
 import random
 
 class MultiTimelineMCTS:
@@ -12,14 +13,15 @@ class MultiTimelineMCTS:
     branching timelines. It scores each timeline using Somatic 'Gut' feelings 
     and Moral Alignment, collapsing the wave function onto the optimal 'Golden Path'.
     """
-    def __init__(self, reasoning: CognitiveReasoningEngine, somatic: SomaticMarkerEngine, morality: MoralAlignmentMatrix):
+    def __init__(self, reasoning: CognitiveReasoningEngine, somatic: SomaticMarkerEngine, morality: MoralAlignmentMatrix, mirroring: EpisodicMirroringEngine = None):
         self.reasoning = reasoning
         self.somatic = somatic
         self.morality = morality
+        self.mirroring = mirroring
         self.theodicy = TheodicyEngine(reasoning)
         self.num_simulations = 3 # Kept low for prototype speed
 
-    def find_golden_path(self, base_action: Dict[str, Any], context_points: list) -> Dict[str, Any]:
+    def find_golden_path(self, base_action: Dict[str, Any], context_points: list, user_id: str = "default_user") -> Dict[str, Any]:
         """
         Simulates multiple variants of the action. Returns the optimal path to execute.
         """
@@ -31,15 +33,22 @@ class MultiTimelineMCTS:
         context_strings = [p.payload.get("concept", "") for p in context_points]
         context_block = "\n".join([f"- {c}" for c in context_strings])
 
+        # Fetch user's mirrored cognitive cadence to constraint the simulation
+        cadence_block = ""
+        if self.mirroring:
+            cadences = self.mirroring.retrieve_user_cadence(user_id)
+            if cadences:
+                cadence_block = "\nUser's Cognitive Cadence to Mimic:\n" + "\n".join([f"- {c}" for c in cadences])
+
         timelines = []
 
         # Generate branching timelines
         for i in range(self.num_simulations):
             # Introduce slight chaos to LLM prompt to branch the simulation
             prompt = (
-                f"Context: {context_block}\n"
+                f"Context: {context_block}\n{cadence_block}\n"
                 f"Proposed Action: {action_name} (Reason: {reason})\n"
-                f"Simulate timeline variant {i+1}. Predict a highly detailed, likely outcome. "
+                f"Simulate timeline variant {i+1}. Predict a highly detailed, likely outcome, strictly adhering to the user's cognitive cadence if provided. "
                 "Output ONLY the outcome description."
             )
             

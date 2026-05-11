@@ -19,6 +19,9 @@ from src.learning.theory_of_mind import TheoryOfMindEngine
 from src.generation.dual_process import DualProcessRouter
 from src.learning.flashbulb import FlashbulbMemoryProtocol
 from src.learning.state import InternalStateEngine
+from src.learning.neuroplasticity import DynamicTopologyEngine
+from src.learning.mirroring import EpisodicMirroringEngine
+from src.generation.coprocessing import SymbioticCoProcessingEngine
 import os
 
 router = APIRouter()
@@ -41,9 +44,12 @@ flashbulb = None
 state = None
 morality = None
 self_mod = None
+neuroplasticity = None
+mirroring = None
+coprocessing = None
 
 def init_interfaces():
-    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, spatial, somatic, tom, dual_process, flashbulb, state, morality, self_mod
+    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, spatial, somatic, tom, dual_process, flashbulb, state, morality, self_mod, neuroplasticity, mirroring, coprocessing
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
@@ -59,10 +65,14 @@ def init_interfaces():
         execution_router = ExecutionRouter(cache, meta_learning=meta)
         somatic = SomaticMarkerEngine(wiki)
         morality = MoralAlignmentMatrix()
+        mirroring = EpisodicMirroringEngine(wiki, reasoning)
         world_model = PredictiveWorldModel(reasoning, graph, somatic, morality)
+        world_model.mcts.mirroring = mirroring # Inject into existing MCTS
         tom = TheoryOfMindEngine(graph, reasoning)
         dual_process = DualProcessRouter(wiki, reasoning)
         self_mod = RecursiveSelfModificationEngine(reasoning)
+        neuroplasticity = DynamicTopologyEngine(wiki)
+        coprocessing = SymbioticCoProcessingEngine(graph)
 
 class QueryPayload(BaseModel):
     query: str
@@ -88,10 +98,17 @@ async def generate_response(payload: QueryPayload):
         event_id = "query_event_001" 
         spatial.map_memory(event_id, payload.spatial_coords[0], payload.spatial_coords[1], payload.spatial_coords[2])
     
-    # 3. Retrieve relevant context from semantic memory
+    # 3. Retrieve relevant context from semantic memory and evaluate Neuroplasticity
     try:
-        similar_concepts = wiki.retrieve_similar(query_params, collection=wiki.semantic_collection, limit=3)
+        similar_concepts = wiki.retrieve_similar(query_params, collection=wiki.semantic_collection, limit=5)
         context_blocks = [c.payload.get("concept", "") for c in similar_concepts if "concept" in c.payload]
+        
+        # Neuroplasticity Check: Are we querying a very dense cluster?
+        if len(similar_concepts) >= 5:
+            cluster_vecs = [c.vector for c in similar_concepts]
+            cluster_ids = [c.id for c in similar_concepts]
+            neuroplasticity.evaluate_and_expand_cluster(cluster_vecs, cluster_ids)
+            
     except Exception as e:
         print(f"Memory retrieval error: {e}")
         context_blocks = []
@@ -99,16 +116,17 @@ async def generate_response(payload: QueryPayload):
     # Extract IDs for RL feedback binding
     context_ids = [c.id for c in similar_concepts]
     
-    # 3. Theory of Mind: Deduce audience instruction and log exposure
+    # 4. Theory of Mind: Deduce audience instruction and log exposure
     tom_instruction = tom.model_audience(payload.user_id, payload.query, similar_concepts)
     tom.log_interaction(payload.user_id, context_ids)
     
-    # 4. Dual-Process Generation (System 1 vs System 2)
+    # 5. Dual-Process Generation (System 1 vs System 2)
     response, process_used = dual_process.route_query(payload.query, similar_concepts, tom_instruction)
     
     action_result = None
+    mcts_tree = None
     if payload.execute_action:
-        # 5. If autonomous execution is enabled, decide and act
+        # 6. If autonomous execution is enabled, decide and act
         decision_json = action_engine.decide_action(payload.query, context_blocks)
         
         # Self-Modification Override Check
@@ -119,8 +137,10 @@ async def generate_response(payload: QueryPayload):
             action_result = f"Self-Modification of {file_target}: {'Success' if success else 'Failed'}"
             response += f"\n\n[AGI Action]: {action_result}"
         else:
-            # 6. Intercept with World Model MCTS (Somatic Veto + Multi-Timeline Prediction)
-            prediction = world_model.simulate_action(decision_json, similar_concepts)
+            # 7. Intercept with World Model MCTS (Somatic Veto + Multi-Timeline Prediction)
+            # Pass user_id so MCTS can use Episodic Mirroring cadences
+            prediction = world_model.mcts.find_golden_path(decision_json, similar_concepts, user_id=payload.user_id)
+            mcts_tree = prediction.get("prediction", "Tree collapsed")
             
             if prediction.get("proceed", True):
                 action_result = execution_router.execute_action(decision_json)
@@ -135,8 +155,24 @@ async def generate_response(payload: QueryPayload):
         "process_used": process_used,
         "semantic_context_used": len(context_blocks),
         "context_ids": context_ids, # Returned so UI can send feedback to these memories
-        "action_executed": action_result is not None
+        "action_executed": action_result is not None,
+        "mcts_simulation": mcts_tree
     }
+
+@router.get("/coprocessing/graph")
+async def get_live_graph():
+    init_interfaces()
+    return coprocessing.get_live_causal_graph_state()
+
+class GraftPayload(BaseModel):
+    source_id: str
+    target_id: str
+
+@router.post("/coprocessing/graft")
+async def graft_causal_link(payload: GraftPayload):
+    init_interfaces()
+    success = coprocessing.graft_causal_link(payload.source_id, payload.target_id)
+    return {"status": "success" if success else "error"}
 
 class FeedbackPayload(BaseModel):
     memory_ids: list[str]
