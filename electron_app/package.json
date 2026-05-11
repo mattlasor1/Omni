@@ -1,0 +1,13 @@
+{
+  "name": "omnitwin-desktop",
+  "version": "1.0.0",
+  "description": "OmniTwin AGI Desktop Client",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-packager . OmniTwin --platform=all --arch=x64 --out=release-builds --overwrite"
+  },
+  "dependencies": {
+    "electron": "^25.3.0"
+  }
+}
