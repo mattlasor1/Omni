@@ -22,7 +22,10 @@ from src.learning.state import InternalStateEngine
 from src.learning.neuroplasticity import DynamicTopologyEngine
 from src.learning.mirroring import EpisodicMirroringEngine
 from src.generation.coprocessing import SymbioticCoProcessingEngine
+from src.learning.stylometrics import StylometricEngine
+from src.execution.authority import TrustAndAuthorityProtocol
 import os
+import uuid
 
 router = APIRouter()
 
@@ -47,9 +50,11 @@ self_mod = None
 neuroplasticity = None
 mirroring = None
 coprocessing = None
+stylometrics = None
+authority = None
 
 def init_interfaces():
-    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, spatial, somatic, tom, dual_process, flashbulb, state, morality, self_mod, neuroplasticity, mirroring, coprocessing
+    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, spatial, somatic, tom, dual_process, flashbulb, state, morality, self_mod, neuroplasticity, mirroring, coprocessing, stylometrics, authority
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
@@ -73,6 +78,8 @@ def init_interfaces():
         self_mod = RecursiveSelfModificationEngine(reasoning)
         neuroplasticity = DynamicTopologyEngine(wiki)
         coprocessing = SymbioticCoProcessingEngine(graph)
+        stylometrics = StylometricEngine(wiki)
+        authority = TrustAndAuthorityProtocol()
 
 class QueryPayload(BaseModel):
     query: str
@@ -116,12 +123,14 @@ async def generate_response(payload: QueryPayload):
     # Extract IDs for RL feedback binding
     context_ids = [c.id for c in similar_concepts]
     
-    # 4. Theory of Mind: Deduce audience instruction and log exposure
+    # 4. Theory of Mind & Stylometric Cloning
     tom_instruction = tom.model_audience(payload.user_id, payload.query, similar_concepts)
+    style_instruction = stylometrics.get_style_prompt(payload.user_id)
+    combined_instruction = f"{tom_instruction} {style_instruction}"
     tom.log_interaction(payload.user_id, context_ids)
     
     # 5. Dual-Process Generation (System 1 vs System 2)
-    response, process_used = dual_process.route_query(payload.query, similar_concepts, tom_instruction)
+    response, process_used = dual_process.route_query(payload.query, similar_concepts, combined_instruction)
     
     action_result = None
     mcts_tree = None
@@ -138,13 +147,25 @@ async def generate_response(payload: QueryPayload):
             response += f"\n\n[AGI Action]: {action_result}"
         else:
             # 7. Intercept with World Model MCTS (Somatic Veto + Multi-Timeline Prediction)
-            # Pass user_id so MCTS can use Episodic Mirroring cadences
             prediction = world_model.mcts.find_golden_path(decision_json, similar_concepts, user_id=payload.user_id)
             mcts_tree = prediction.get("prediction", "Tree collapsed")
             
             if prediction.get("proceed", True):
-                action_result = execution_router.execute_action(decision_json)
-                response += f"\n\n[Action Taken]: {decision_json.get('action')}\n[Result]: {action_result}"
+                # 8. Trust & Authority Check
+                # Calculate average bayesian belief from context
+                avg_belief = 1.0
+                if similar_concepts:
+                    b_sum = sum([c.payload.get("bayes_alpha", 1.0) / max((c.payload.get("bayes_alpha", 1.0) + c.payload.get("bayes_beta", 1.0)), 1) for c in similar_concepts])
+                    avg_belief = b_sum / len(similar_concepts)
+                    
+                if authority.evaluate_authority(prediction, avg_belief):
+                    action_result = execution_router.execute_action(decision_json)
+                    response += f"\n\n[Action Taken]: {decision_json.get('action')}\n[Result]: {action_result}"
+                else:
+                    a_id = str(uuid.uuid4())
+                    authority.queue_action(a_id, decision_json)
+                    action_result = f"Action Queued. Awaiting Human Approval (ID: {a_id})"
+                    response += f"\n\n[Action Paused]: High risk / Low confidence. Please approve action '{decision_json.get('action')}' in the UI."
             else:
                 action_result = f"VETOED by World Model. Prediction: {prediction.get('prediction')}"
                 response += f"\n\n[Action Vetoed]: {decision_json.get('action')} - Reason: {prediction.get('prediction')}"
@@ -173,6 +194,23 @@ async def graft_causal_link(payload: GraftPayload):
     init_interfaces()
     success = coprocessing.graft_causal_link(payload.source_id, payload.target_id)
     return {"status": "success" if success else "error"}
+
+@router.get("/authority/queue")
+async def get_authority_queue():
+    init_interfaces()
+    return {"queue": authority.get_pending_queue()}
+
+class AuthActionPayload(BaseModel):
+    action_id: str
+
+@router.post("/authority/approve")
+async def approve_action(payload: AuthActionPayload):
+    init_interfaces()
+    action_json = authority.approve_action(payload.action_id)
+    if action_json:
+        result = execution_router.execute_action(action_json)
+        return {"status": "success", "result": result}
+    return {"status": "error", "message": "Action not found."}
 
 class FeedbackPayload(BaseModel):
     memory_ids: list[str]

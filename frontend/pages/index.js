@@ -7,6 +7,7 @@ export default function TrainingArena() {
   const [graphData, setGraphData] = useState(null);
   const [graftSource, setGraftSource] = useState('');
   const [graftTarget, setGraftTarget] = useState('');
+  const [authQueue, setAuthQueue] = useState([]);
 
   const fetchStats = async () => {
     try {
@@ -17,6 +18,10 @@ export default function TrainingArena() {
       const graphRes = await fetch('http://localhost:8000/api/v1/coprocessing/graph');
       const gData = await graphRes.json();
       setGraphData(gData);
+      
+      const authRes = await fetch('http://localhost:8000/api/v1/authority/queue');
+      const authData = await authRes.json();
+      setAuthQueue(authData.queue || []);
     } catch (e) {
       console.error(e);
     }
@@ -38,6 +43,20 @@ export default function TrainingArena() {
       alert('Neural Link Graft Successful!');
       setGraftSource('');
       setGraftTarget('');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleApproveAction = async (actionId) => {
+    try {
+      await fetch('http://localhost:8000/api/v1/authority/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action_id: actionId })
+      });
+      alert('Action Approved and Executed!');
+      fetchStats();
     } catch (e) {
       console.error(e);
     }
@@ -162,6 +181,19 @@ export default function TrainingArena() {
                <strong>Live Causal Nodes:</strong>
                {graphData.nodes.map(n => <div key={n.id} style={{ color: '#2ecc71' }}>ID: {n.id.substring(0,6)}... - {n.label}</div>)}
              </div>
+          )}
+          
+          {authQueue.length > 0 && (
+            <div style={{ marginTop: '20px', background: '#e74c3c', color: 'white', padding: '15px', borderRadius: '4px' }}>
+              <h3>⚠️ Actions Awaiting Authority</h3>
+              <p style={{ fontSize: '0.8em' }}>High-risk / Low-confidence actions require your explicit cryptographic approval.</p>
+              {authQueue.map(item => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '10px', margin: '5px 0', borderRadius: '4px' }}>
+                  <span>{item.action}</span>
+                  <button onClick={() => handleApproveAction(item.id)} style={{ background: '#2ecc71', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>Authorize</button>
+                </div>
+              ))}
+            </div>
           )}
 
         </div>
