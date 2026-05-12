@@ -1,62 +1,60 @@
-from src.memory.vector_db import SolidStateWiki
+import os
+import psutil
+from typing import List, Dict, Any
 
 class SomaticMarkerEngine:
     """
-    Implements the Somatic Marker Hypothesis (Damasio).
-    Humans don't evaluate every decision logically; we rely on "gut feelings" 
-    associated with past experiences to instantly veto or approve actions.
-    This engine associates a visceral 'valence' (-1.0 to 1.0) with concepts.
+    Evaluates the 'gut feeling' of a situation based on past somatic markers
+    and live hardware embodiment.
+    If the host hardware (CPU/RAM) is highly stressed, the twin feels 'physical stress',
+    which limits its curiosity and forces conservative, low-compute MCTS branching.
     """
-    def __init__(self, wiki: SolidStateWiki):
-        self.wiki = wiki
+    def __init__(self, vector_db_client):
+        self.wiki = vector_db_client
 
-    def apply_somatic_marker(self, memory_id: str, intensity: float):
+    def _get_hardware_stress(self) -> float:
         """
-        Binds a visceral feeling to a memory. 
-        Negative intensity = Pain/Aversion. Positive = Pleasure/Attraction.
+        Returns a stress modifier from 0.0 (Idle) to 1.0 (Meltdown)
+        based on actual host hardware metrics.
         """
-        try:
-            points = self.wiki.client.retrieve(
-                collection_name=self.wiki.semantic_collection,
-                ids=[memory_id]
-            )
-            if not points: return
-            
-            point = points[0]
-            current_valence = point.payload.get("somatic_valence", 0.0)
-            
-            # Update visceral feeling
-            new_valence = max(-1.0, min(1.0, current_valence + (intensity * 0.5)))
-            
-            point.payload["somatic_valence"] = new_valence
-            
-            self.wiki.client.set_payload(
-                collection_name=self.wiki.semantic_collection,
-                payload=point.payload,
-                points=[point.id]
-            )
-            print(f"SOMATIC: Bound feeling of {new_valence:.2f} to memory {memory_id}")
-        except Exception as e:
-            print(f"Somatic binding failed: {e}")
-
-    def evaluate_gut_feeling(self, context_memories: list) -> float:
-        """
-        Takes a list of retrieved Qdrant points (memories) relevant to a situation
-        and returns the aggregate "gut feeling".
-        If it returns a deeply negative score, the action can be vetoed instantly
-        without needing logical LLM simulation.
-        """
-        if not context_memories: return 0.0
+        cpu_usage = psutil.cpu_percent(interval=None) / 100.0
+        ram = psutil.virtual_memory()
+        ram_usage = ram.percent / 100.0
         
-        total_valence = 0.0
-        count = 0
-        for memory in context_memories:
-            # Check if this is a raw point struct or dictionary
-            payload = memory.payload if hasattr(memory, 'payload') else memory.get('payload', {})
-            valence = payload.get("somatic_valence", 0.0)
-            if valence != 0.0:
-                total_valence += valence
-                count += 1
-                
-        if count == 0: return 0.0
-        return total_valence / count
+        # Hardware stress is the max of CPU or RAM bottleneck
+        hardware_stress = max(cpu_usage, ram_usage)
+        return hardware_stress
+
+    def evaluate_gut_feeling(self, semantic_context: List[Any]) -> float:
+        """
+        Calculates an emotional/somatic score from -1.0 (Danger/Bad) to 1.0 (Safe/Good).
+        Combines semantic memory weights with live hardware stress.
+        """
+        if not semantic_context:
+            return 0.0 # Neutral
+
+        # 1. Calculate semantic gut feeling
+        somatic_sum = 0.0
+        for concept in semantic_context:
+            payload = getattr(concept, 'payload', {})
+            # Read the somatic marker attached to this memory
+            marker = payload.get("somatic_marker", 0.0)
+            somatic_sum += marker
+            
+        semantic_score = somatic_sum / len(semantic_context)
+        
+        # 2. Embody hardware state
+        hw_stress = self._get_hardware_stress()
+        
+        # High hardware stress induces anxiety, pushing the gut feeling negative (conservative)
+        embodied_score = semantic_score - (hw_stress * 0.5)
+        
+        return max(-1.0, min(1.0, embodied_score))
+        
+    def get_live_state(self) -> Dict[str, Any]:
+        """Exposes live somatic state for the Subconscious Ticker."""
+        return {
+            "hardware_stress": self._get_hardware_stress(),
+            "cpu_percent": psutil.cpu_percent(),
+            "ram_percent": psutil.virtual_memory().percent
+        }

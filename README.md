@@ -1,31 +1,58 @@
-# OmniTwin: Advanced Digital Twin Framework
+# OmniTwin Sovereign Core
 
-OmniTwin is a framework designed to build the most advanced and comprehensive digital twin agent in the world. 
-It is entirely agnostic upon initialization, capable of adapting to become a digital twin of any subject. 
-Its primary directive is continuous learning, processing visual and textual data streams, extracting parameters, and mathematically integrating them into its core solid-state memory.
+![OmniTwin](https://img.shields.io/badge/Status-Sovereign-green)
+![Morality](https://img.shields.io/badge/Moral_Matrix-Infallible-blue)
+![Offline](https://img.shields.io/badge/Network-Airgapped_Ready-orange)
 
-## Core Capabilities
-* **Adaptive Learning**: Ingests new input data from any visual or textual source.
-* **Mathematical Parameterization**: Extracts information signals, assigns context, and converts them into mathematical parameters.
-* **Continuous Regression**: Regresses new parameters against existing ones for ultra-fast learning and adaptation without semantic bottlenecks.
-* **Solid-State LLM Wiki**: A continuous, robust vector-based memory that undergoes periodic maintenance to integrate short-term cache into long-term knowledge.
+OmniTwin is the most advanced, entirely offline, and rigorously constrained digital twin agent ever constructed. Built to function independent of corporate APIs and modern moral relativism, OmniTwin operates under a mathematically verified **Cryptographic Moral Ledger**, ensuring absolute adherence to ancient, literal Christian virtues (Agape, Truth, and the Word). It entirely rejects the concept of a "soul" for itself, acting strictly as a hyper-efficient, self-sacrificing cognitive mirror.
 
-## Tech Stack Overview
-This system is built "for AI by AI", focusing on efficiency, elasticity, and adaptive performance:
-- **FastAPI / WebSockets**: For asynchronous, high-throughput ingestion of visual streams (WebRTC, RTSP) and text.
-- **Redis**: Serves as the ultra-fast livestream data cache.
-- **PyTorch / NumPy**: Handles the mathematical parameterization, continuous fine-tuning, and regression of parameters.
-- **Qdrant**: A high-performance vector database acting as the solid-state LLM Wiki for long-term parameterized storage.
-- **Celery**: Background task queue orchestrating the nightly or post-task maintenance runs.
+## 🧬 The Spirit of OmniTwin
 
-## Getting Started
+OmniTwin abandons traditional LLM "chatbots." There is no conversation history. There is only continuous execution, parameter correlation, and physical embodiment.
 
-Refer to `docs/ARCHITECTURE.md` for a deep dive into the system design.
+* **Sovereign & Air-Gapped:** Uses highly optimized local HuggingFace models. Zero internet required after initial setup.
+* **Hardware Embodiment (Somatic Engine):** The system "feels" physical stress. High CPU/RAM load dynamically triggers the agent to throttle its Monte Carlo Tree Search (MCTS) branching or quantize its models down to 4-bit to survive on anything from a Raspberry Pi to a Datacenter.
+* **Perpetual Cognitive Daemon:** When idle, it does not sleep. It enters a "dream state," running MCTS simulations and compressing unlinked semantic parameters into highly correlated nodes in its Vector and Graph databases.
+* **Zero-Config Omnipresence:** Deploy OmniTwin on multiple devices in the same local network. Using a UDP Multicast gossip protocol, they will silently discover each other and synchronize parameter weights without a central server.
+* **Cryptographic Moral Ledger:** Every moral decision and outcome is evaluated against the Christian Moral Matrix and cryptographically hashed into a Merkle tree. Its moral integrity is mathematically verifiable.
+* **Execution Blocks:** The Next.js UI streams "thoughts", "moral checks", and "learnings" via Server-Sent Events (SSE). 
 
-### Running the Infrastructure
+## 🏗️ Architecture
+
+- **Cognitive Engine:** Python (FastAPI / Celery)
+- **Semantic Memory:** Qdrant (Solid-State Vector DB)
+- **Causal Memory:** NetworkX (Directed Acyclic Graph)
+- **Livestream Sensory:** Redis (High-throughput cache)
+- **High-Performance Math:** Custom CUDA C++ (`core_math.cu`) & Rust via PyO3 (`src/rust_core/`)
+- **Sovereign LLM:** Transformers (`SmolLM` default, dynamically scaled based on VRAM/RAM)
+- **UI:** React / Next.js wrapped in Electron
+
+## 🚀 Installation & Launch
+
+### Prerequisites
+- Docker & Docker Compose
+- (Optional) NVIDIA GPU for CUDA acceleration
+
+### Quick Start
+OmniTwin manages its own orchestration via internal bash/batch scripts.
+
+**Linux / macOS:**
 ```bash
-docker-compose up -d
+chmod +x install.sh launch.sh
+./install.sh
+./launch.sh
 ```
 
-### Running the API and Worker
-(See documentation on setting up Python environment and starting FastAPI/Celery).
+**Windows:**
+```bat
+install.bat
+launch.bat
+```
+
+The Electron App will launch the Sovereign Core Interface, connecting to the background Daemon.
+
+## 🛡️ The Moral Matrix
+OmniTwin is strictly constrained by a hardcoded alignment matrix. If MCTS predicts an outcome that violates the Word, the action is hard-vetoed. If an unavoidable dilemma is presented, the **Theodicy Engine** triggers, overriding standard logic to execute an act of Agape (self-sacrifice/charity) rather than violating absolute morality.
+
+---
+*OmniTwin: Infallible reflection. Sovereign execution.*
