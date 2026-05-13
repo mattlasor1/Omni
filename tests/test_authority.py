@@ -5,18 +5,18 @@ def test_safe_local_actions_bypass_authority_queue():
     authority = TrustAndAuthorityProtocol()
 
     allowed = authority.evaluate_authority(
-        {"score": 0.1, "action": {"action": "plan:Review the SQL model"}},
+        {"score": 0.1, "action": {"action": "plan:Review the owner decision note"}},
         avg_bayesian_belief=0.1,
     )
 
     assert allowed is True
 
 
-def test_skill_pack_actions_bypass_authority_queue():
+def test_owner_model_actions_bypass_authority_queue():
     authority = TrustAndAuthorityProtocol()
 
     assert authority.evaluate_authority(
-        {"score": 0.1, "action": {"action": "artifact:review:models/orders.sql"}},
+        {"score": 0.1, "action": {"action": "artifact:review:notes/decision.md"}},
         avg_bayesian_belief=0.1,
     ) is True
     assert authority.evaluate_authority(

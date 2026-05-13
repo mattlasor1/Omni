@@ -116,7 +116,7 @@ class CognitiveReasoningEngine:
         if not semantic_context:
             return (
                 "I do not have enough grounded local training context yet. "
-                "Add a profession profile and domain lessons so I can answer from your own material."
+                "Add an owner profile and local lessons so I can answer from your own material."
             )
 
         lead = semantic_context[0]

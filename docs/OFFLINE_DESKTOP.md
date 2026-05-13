@@ -20,19 +20,20 @@ When Redis and Qdrant are not available, OmniTwin uses local JSON-backed stores 
 
 This keeps the app runnable as a single-machine desktop system.
 
-## Profession Training
+## Owner Training
 
 The training layer stores:
 
-- one active profession profile
-- domain lessons and runbooks
+- one active owner profile
+- local lessons, preferences, corrections, and workflow notes
 - workspace snapshots imported from local repos and operator folders
 - competency evidence
 - readiness evaluations
+- artifact reviews and owner-model task evaluations
 - live interaction history
 - self-review reports and remediation items
 
-Use the training API to build a twin around a role before expecting strong results from the query path. The highest-leverage path is to import a real local workspace so Omni can ground itself in actual SQL, DAG, config, and runbook artifacts.
+Use the training API to build a twin around its owner before expecting strong results from the query path. The highest-leverage path is to import real local evidence so Omni can ground itself in actual notes, decisions, examples, configs, code, and workflow artifacts.
 
 ## Continuous Review
 

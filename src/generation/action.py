@@ -35,21 +35,21 @@ class ProceduralActionEngine:
         query = situation_context.lower()
         path = self._extract_path(situation_context)
         if any(token in query for token in ["task evaluation", "task eval", "benchmark", "run eval", "run evaluation", "skill evaluation"]):
-            return {"action": "evaluation:run", "reason": "Run the local skill task evaluation rubric."}
+            return {"action": "evaluation:run", "reason": "Run the local owner-model evaluation rubric."}
         if path and any(token in query for token in ["import", "ingest", "train on"]):
-            return {"action": f"workspace:import:{path}", "reason": "Import a local workspace into profession training."}
+            return {"action": f"workspace:import:{path}", "reason": "Import local evidence into the owner model."}
         if path and self._looks_like_artifact_path(path) and any(token in query for token in ["analyze", "scan", "review", "inspect"]):
-            return {"action": f"artifact:review:{path}", "reason": "Review a local artifact with the active profession skill pack."}
+            return {"action": f"artifact:review:{path}", "reason": "Review a local artifact against the owner adaptation model."}
         if path and any(token in query for token in ["analyze", "scan", "review", "inspect"]):
-            return {"action": f"workspace:analyze:{path}", "reason": "Analyze a local workspace for profession-specific signals."}
+            return {"action": f"workspace:analyze:{path}", "reason": "Analyze a local workspace for owner-model signals."}
         if any(token in query for token in ["self-evaluate", "self evaluate", "evaluate yourself", "what is missing", "gap", "remediation", "readiness"]):
             return {"action": "training:review", "reason": "Run the local self-review loop and surface remediation work."}
         if any(token in query for token in ["plan", "build", "design", "debug", "improve", "fix", "review", "recover", "triage"]):
             return {"action": f"plan:{situation_context}", "reason": "Offline planner can produce a local runbook."}
         if any(token in query for token in ["what do you know", "remember", "teach", "lesson", "sql", "pipeline"]):
-            return {"action": f"search:{situation_context}", "reason": "Search local lessons and profession memory."}
+            return {"action": f"search:{situation_context}", "reason": "Search local lessons and owner memory."}
         if any(token in query for token in ["profile", "career", "role"]):
-            return {"action": "profile:status", "reason": "Inspect the active profession profile."}
+            return {"action": "profile:status", "reason": "Inspect the active owner profile."}
         return {"action": "none", "reason": "No stronger local action selected."}
 
     def decide_action(self, situation_context: str, semantic_memories: list[str]) -> dict:

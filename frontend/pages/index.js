@@ -23,7 +23,7 @@ export default function TwinExecutionInterface() {
   const [planState, setPlanState] = useState(null);
   const [lessonTitle, setLessonTitle] = useState("");
   const [lessonContent, setLessonContent] = useState("");
-  const [lessonTags, setLessonTags] = useState("sql_modeling, orchestration");
+  const [lessonTags, setLessonTags] = useState("owner_identity, workflow_fluency");
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceReport, setWorkspaceReport] = useState(null);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
@@ -84,18 +84,20 @@ export default function TwinExecutionInterface() {
     }
   };
 
-  const bootstrapDataEngineer = async () => {
+  const bootstrapPersonalTwin = async () => {
     await fetch(`${apiBase}/training/profile`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        template_id: "data_engineer",
-        display_name: "My Data Engineer Twin",
+        template_id: "personal_twin",
+        display_name: "My Personal Twin",
         goals: [
-          "Help debug warehouse issues",
-          "Improve DAG and dbt design decisions",
-          "Produce stronger runbooks and reviews",
+          "Learn how I think and work from local evidence",
+          "Mirror my decision standards and communication style",
+          "Improve through corrections and self-review",
         ],
+        role_description: "Owner-defined role and life context. Refine this with lessons and imported artifacts.",
+        communication_style: "Concise, practical, grounded in local evidence.",
       }),
     });
     await refreshTraining();
@@ -286,7 +288,7 @@ export default function TwinExecutionInterface() {
           <div>
             <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>OmniTwin Offline Workbench</div>
             <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
-              {profileState?.profile ? `${profileState.profile.display_name} active` : "No profession profile configured yet"}
+              {profileState?.profile ? `${profileState.profile.display_name} active` : "No owner profile configured yet"}
             </div>
           </div>
           {subconsciousState ? (
@@ -308,14 +310,14 @@ export default function TwinExecutionInterface() {
       <div style={{ maxWidth: "1380px", margin: "0 auto", padding: "20px", display: "grid", gridTemplateColumns: "360px minmax(0, 1fr)", gap: "20px" }}>
         <aside style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
-            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "8px" }}>Twin Training</div>
+            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "8px" }}>Owner Model</div>
             {!profileState?.profile ? (
               <>
                 <p style={{ color: "#cbd5e1", fontSize: "0.92rem", lineHeight: 1.5 }}>
-                  Start with a profession template so Omni learns in the shape of real work, not generic memory.
+                  Start with an owner profile so Omni learns your goals, style, constraints, and standards from local evidence.
                 </p>
-                <button onClick={bootstrapDataEngineer} style={{ width: "100%", padding: "12px", borderRadius: "10px", backgroundColor: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
-                  Create Data Engineer Twin
+                <button onClick={bootstrapPersonalTwin} style={{ width: "100%", padding: "12px", borderRadius: "10px", backgroundColor: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                  Create Personal Twin
                 </button>
                 <div style={{ marginTop: "10px", color: "#64748b", fontSize: "0.82rem" }}>
                   Available templates: {templates.map((template) => template.label).join(", ")}
@@ -400,16 +402,16 @@ export default function TwinExecutionInterface() {
               </button>
             </div>
             <div style={{ marginTop: "10px", color: "#64748b", fontSize: "0.82rem", lineHeight: 1.5 }}>
-              Point Omni at a local repo, runbook folder, or analytics project to extract profession-specific lessons automatically.
+              Point Omni at local notes, decisions, examples, projects, and workflow artifacts to extract owner-specific lessons automatically.
             </div>
           </section>
 
           <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
-            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Skill Pack</div>
+            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Adaptation Model</div>
             <input
               value={artifactPath}
               onChange={(e) => setArtifactPath(e.target.value)}
-              placeholder="models/orders.sql"
+              placeholder="notes/decision.md or src/example.py"
               style={baseInputStyle}
             />
             <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
@@ -494,7 +496,7 @@ export default function TwinExecutionInterface() {
             <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "24px" }}>
               <div style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "10px" }}>Train locally. Query locally. Improve locally.</div>
               <div style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
-                Omni now keeps a profession profile, accepts explicit lessons, and answers from the local memory it has actually earned.
+                Omni now keeps an owner model, accepts explicit lessons, and answers from the local memory it has actually earned.
               </div>
             </section>
           )}

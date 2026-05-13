@@ -65,7 +65,7 @@ class ExecutionRouter:
             result = self.training.build_task_plan(task)
         elif action == "profile:status":
             profile = self.training.get_active_profile()
-            result = f"Active profile: {profile['display_name']} ({profile['label']})" if profile else "No active profession profile."
+            result = f"Active owner profile: {profile['display_name']} ({profile['label']})" if profile else "No active owner profile."
         elif action == "training:plan":
             plan = self.training.build_training_plan()
             result = " | ".join(plan.get("next_steps", [])) or plan.get("message", "No training plan available.")

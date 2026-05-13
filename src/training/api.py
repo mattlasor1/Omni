@@ -11,10 +11,15 @@ training = TrainingService()
 
 
 class ProfilePayload(BaseModel):
-    template_id: str = "generic_professional"
+    template_id: str = "personal_twin"
     display_name: str | None = None
     goals: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
+    owner_name: str | None = None
+    role_description: str | None = None
+    communication_style: str | None = None
+    values: list[str] = Field(default_factory=list)
+    decision_principles: list[str] = Field(default_factory=list)
 
 
 class LessonPayload(BaseModel):
@@ -54,7 +59,7 @@ async def get_profile():
         "self_review": self_review,
         "task_evaluation": training.get_latest_task_evaluation(),
         "artifact_reviews": training.get_recent_artifact_reviews(limit=5),
-        "skill_pack": training.get_skill_pack_definition(),
+        "adaptation_model": training.get_adaptation_model_definition(),
         "remediation_queue": training.get_remediation_queue(),
     }
 
@@ -66,6 +71,11 @@ async def activate_profile(payload: ProfilePayload):
         display_name=payload.display_name,
         goals=payload.goals,
         constraints=payload.constraints,
+        owner_name=payload.owner_name,
+        role_description=payload.role_description,
+        communication_style=payload.communication_style,
+        values=payload.values,
+        decision_principles=payload.decision_principles,
     )
     return {"status": "success", "profile": profile}
 
@@ -104,7 +114,7 @@ async def get_self_review():
         return review
     if training.get_active_profile():
         return training.run_self_review(trigger="api_read", persist=False, generate_reflections=False)
-    return {"status": "unconfigured", "readiness_score": 0.0, "gaps": ["No active profession profile."]}
+    return {"status": "unconfigured", "readiness_score": 0.0, "gaps": ["No active owner profile."]}
 
 
 @router.post("/self-review")
@@ -117,9 +127,9 @@ async def get_remediation_queue():
     return {"items": training.get_remediation_queue()}
 
 
-@router.get("/skill-pack")
-async def get_skill_pack():
-    return training.get_skill_pack_definition()
+@router.get("/adaptation-model")
+async def get_adaptation_model():
+    return training.get_adaptation_model_definition()
 
 
 @router.post("/artifact/review")

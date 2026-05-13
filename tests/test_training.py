@@ -6,24 +6,28 @@ from src.main import app
 client = TestClient(app)
 
 
-def test_training_profile_lifecycle():
+def test_owner_profile_lifecycle():
     create_res = client.post(
         "/api/v1/training/profile",
         json={
-            "template_id": "data_engineer",
-            "display_name": "Warehouse Twin",
-            "goals": ["Help with SQL reviews", "Improve pipeline runbooks"],
+            "template_id": "personal_twin",
+            "display_name": "Matt Twin",
+            "goals": ["Mirror my working style", "Help me make safer decisions"],
+            "role_description": "Builds software, evaluates tradeoffs, and wants concise execution help.",
+            "communication_style": "Direct, practical, and evidence-grounded.",
+            "values": ["offline autonomy", "reversible changes"],
+            "decision_principles": ["validate before acting"],
         },
     )
     assert create_res.status_code == 200
-    assert create_res.json()["profile"]["label"] == "Data Engineer"
+    assert create_res.json()["profile"]["label"] == "Personal Twin"
 
     lesson_res = client.post(
         "/api/v1/training/lesson",
         json={
-            "title": "Incremental dbt rule",
-            "content": "Prefer partition pruning and idempotent merge logic for large fact models.",
-            "skill_tags": ["sql_modeling", "performance"],
+            "title": "Owner decision rule",
+            "content": "Prefer reversible changes, explain risk, and validate the result before calling work complete.",
+            "skill_tags": ["owner_identity", "decision_judgment", "quality_standards"],
         },
     )
     assert lesson_res.status_code == 200
@@ -31,12 +35,13 @@ def test_training_profile_lifecycle():
     profile_res = client.get("/api/v1/training/profile")
     assert profile_res.status_code == 200
     data = profile_res.json()
-    assert data["profile"]["display_name"] == "Warehouse Twin"
-    assert any(item["name"] == "sql_modeling" for item in data["profile"]["competencies"])
+    assert data["profile"]["display_name"] == "Matt Twin"
+    assert any(item["name"] == "owner_identity" for item in data["profile"]["competencies"])
+    assert data["adaptation_model"]["model"]["template_id"] == "personal_twin"
 
 
 def test_training_search_and_plan():
-    search_res = client.get("/api/v1/training/lessons", params={"query": "partition pruning merge", "limit": 3})
+    search_res = client.get("/api/v1/training/lessons", params={"query": "reversible risk validate", "limit": 3})
     assert search_res.status_code == 200
     assert len(search_res.json()["lessons"]) >= 1
 
@@ -56,28 +61,27 @@ def test_training_search_and_plan():
 
 
 def test_workspace_analysis_and_import(tmp_path):
-    workspace = tmp_path / "analytics_repo"
-    (workspace / "models").mkdir(parents=True)
-    (workspace / "dags").mkdir()
-    (workspace / "runbooks").mkdir()
+    workspace = tmp_path / "owner_context"
+    (workspace / "notes").mkdir(parents=True)
+    (workspace / "src").mkdir()
+    (workspace / "config").mkdir()
 
-    (workspace / "dbt_project.yml").write_text("name: analytics_project\nmodels:\n  analytics:\n    +materialized: table\n", encoding="utf-8")
-    (workspace / "models" / "orders.sql").write_text(
-        "select customer_id, sum(amount) as revenue from raw.orders group by 1\n",
+    (workspace / "notes" / "working_style.md").write_text(
+        "# Working style\nPurpose: keep decisions concise.\nWorkflow: inspect, decide, change, validate.\nDecision criteria: prefer reversible changes and name risks.\nFeedback: if the summary is vague, make it sharper.\n",
         encoding="utf-8",
     )
-    (workspace / "dags" / "daily_load.py").write_text(
-        "from airflow import DAG\nfrom airflow.operators.python import PythonOperator\n",
+    (workspace / "src" / "helper.py").write_text(
+        "def normalize(value):\n    assert value\n    return value.strip().lower()\n",
         encoding="utf-8",
     )
-    (workspace / "runbooks" / "incident.md").write_text(
-        "# Warehouse incident runbook\nRollback failed load and inspect retry logs.\n",
+    (workspace / "config" / "local.json").write_text(
+        "{\"purpose\": \"local owner preferences\", \"owner\": \"Matt\", \"offline\": true}\n",
         encoding="utf-8",
     )
 
     create_res = client.post(
         "/api/v1/training/profile",
-        json={"template_id": "data_engineer", "display_name": "Repo Twin"},
+        json={"template_id": "personal_twin", "display_name": "Repo Twin"},
     )
     assert create_res.status_code == 200
 
@@ -87,8 +91,8 @@ def test_workspace_analysis_and_import(tmp_path):
     )
     assert analyze_res.status_code == 200
     report = analyze_res.json()["report"]
-    assert "dbt" in report["frameworks"]
-    assert any(artifact["kind"] == "python_job" for artifact in report["artifacts"])
+    assert "python" in report["frameworks"]
+    assert any(artifact["kind"] == "code" for artifact in report["artifacts"])
     assert any("review_score" in artifact for artifact in report["artifacts"])
 
     import_res = client.post(
@@ -109,7 +113,7 @@ def test_workspace_analysis_and_import(tmp_path):
     profile_res = client.get("/api/v1/training/profile")
     assert profile_res.status_code == 200
     profile_data = profile_res.json()
-    assert profile_data["workspace"]["workspace_name"] == "analytics_repo"
+    assert profile_data["workspace"]["workspace_name"] == "owner_context"
     assert profile_data["evaluation"]["readiness_score"] > 0.0
     assert "self_review" in profile_data
     assert "task_evaluation" in profile_data
@@ -118,33 +122,33 @@ def test_workspace_analysis_and_import(tmp_path):
 
     artifact_res = client.post(
         "/api/v1/training/artifact/review",
-        json={"path": "models/orders.sql"},
+        json={"path": "notes/working_style.md"},
     )
     assert artifact_res.status_code == 200
     artifact_review = artifact_res.json()["review"]
-    assert artifact_review["artifact_type"] == "sql_model"
+    assert artifact_review["artifact_type"] == "document"
     assert artifact_review["score"] > 0
 
     task_eval_res = client.post("/api/v1/training/evals/run")
     assert task_eval_res.status_code == 200
     task_evaluation = task_eval_res.json()["evaluation"]
     assert task_evaluation["overall_score"] > 0
-    assert any(task["name"] == "SQL Model Review" for task in task_evaluation["tasks"])
+    assert any(task["name"] == "Owner Identity Model" for task in task_evaluation["tasks"])
 
 
 def test_training_records_interactions_and_surfaces_review():
     create_res = client.post(
         "/api/v1/training/profile",
-        json={"template_id": "data_engineer", "display_name": "Interaction Twin"},
+        json={"template_id": "personal_twin", "display_name": "Interaction Twin"},
     )
     assert create_res.status_code == 200
 
     client.post(
         "/api/v1/training/lesson",
         json={
-            "title": "DAG rollback rule",
-            "content": "Inspect the failing task logs, preserve the watermark, and only backfill after confirming idempotency.",
-            "skill_tags": ["orchestration", "incident_response"],
+            "title": "Correction style",
+            "content": "When feedback says the answer is vague, make the next response concrete and decision-first.",
+            "skill_tags": ["feedback_adaptation", "communication_style", "owner_identity"],
         },
     )
 
@@ -155,11 +159,11 @@ def test_training_records_interactions_and_surfaces_review():
 
     service = TrainingService()
     service.record_interaction(
-        query="How do I recover a failed DAG run?",
-        response="Inspect task logs, verify retry safety, and backfill only after idempotency checks.",
-        context_blocks=["DAG rollback rule: Inspect the failing task logs..."],
+        query="Make this clearer and more direct.",
+        response="I will make the next answer concrete and decision-first.",
+        context_blocks=["Correction style: make the next response concrete..."],
         process_used="System 2",
-        action_result="Generated local recovery plan.",
+        action_result="Captured owner correction.",
     )
 
     review_after = client.post("/api/v1/training/self-review")

@@ -9,33 +9,22 @@ from pathlib import Path
 from typing import Any, Dict
 
 from src.runtime import get_settings
-from src.training.data_engineer import DataEngineerSkillPack
+from src.training.personal_twin import PersonalTwinLearningPack
 from src.training.workspace import WorkspaceAnalyzer
 
 
 PROFILE_TEMPLATES: Dict[str, Dict[str, Any]] = {
-    "data_engineer": {
-        "label": "Data Engineer",
-        "summary": "Designs, operates, and improves data platforms, pipelines, and warehouse models.",
+    "personal_twin": {
+        "label": "Personal Twin",
+        "summary": "Learns the owner's goals, constraints, working style, domain, workflows, and judgment from local evidence.",
         "competencies": [
-            {"name": "sql_modeling", "label": "SQL Modeling", "description": "Design schemas, joins, transformations, and warehouse-friendly SQL.", "target_evidence": 3},
-            {"name": "orchestration", "label": "Orchestration", "description": "Schedule, recover, and reason about DAGs and dependencies.", "target_evidence": 3},
-            {"name": "data_quality", "label": "Data Quality", "description": "Define tests, contracts, and anomaly handling.", "target_evidence": 2},
-            {"name": "performance", "label": "Performance", "description": "Tune compute, storage, and incremental workloads.", "target_evidence": 2},
-            {"name": "incident_response", "label": "Incident Response", "description": "Triage failed loads, broken jobs, and stale datasets.", "target_evidence": 2},
-            {"name": "communication", "label": "Communication", "description": "Explain tradeoffs, runbooks, and stakeholder-facing decisions clearly.", "target_evidence": 2},
+            {"name": "owner_identity", "label": "Owner Identity", "description": "Understands goals, constraints, values, preferences, and communication style.", "target_evidence": 4},
+            {"name": "domain_understanding", "label": "Domain Understanding", "description": "Learns the owner's local vocabulary, facts, tools, and artifacts.", "target_evidence": 4},
+            {"name": "workflow_fluency", "label": "Workflow Fluency", "description": "Knows how the owner performs recurring work, checks results, and handles handoffs.", "target_evidence": 3},
+            {"name": "decision_judgment", "label": "Decision Judgment", "description": "Mirrors the owner's criteria, tradeoffs, risk tolerance, and quality bar.", "target_evidence": 3},
+            {"name": "feedback_adaptation", "label": "Feedback Adaptation", "description": "Improves from corrections, interaction history, and self-review.", "target_evidence": 2},
         ],
-        "tool_preferences": ["sql", "dbt", "airflow", "spark", "warehouse", "lineage", "git"],
-    },
-    "generic_professional": {
-        "label": "General Professional",
-        "summary": "Learns a user's domain, language, workflows, and decision standards from curated local knowledge.",
-        "competencies": [
-            {"name": "domain_knowledge", "label": "Domain Knowledge", "description": "Understands local terminology, rules, and objectives.", "target_evidence": 3},
-            {"name": "workflows", "label": "Workflows", "description": "Knows how work gets done and where mistakes appear.", "target_evidence": 3},
-            {"name": "decision_support", "label": "Decision Support", "description": "Explains options, risks, and next steps clearly.", "target_evidence": 2},
-        ],
-        "tool_preferences": ["documents", "spreadsheets", "notes"],
+        "tool_preferences": ["local documents", "workspace artifacts", "notes", "corrections", "interaction history"],
     },
 }
 
@@ -78,6 +67,11 @@ class TrainingService:
         normalized.setdefault("constraints", ["Run entirely offline", "Use only local knowledge and tools"])
         normalized.setdefault("competencies", [])
         normalized.setdefault("tool_preferences", [])
+        normalized.setdefault("owner_name", None)
+        normalized.setdefault("role_description", "")
+        normalized.setdefault("communication_style", "")
+        normalized.setdefault("values", [])
+        normalized.setdefault("decision_principles", [])
         normalized.setdefault("created_at", _now())
         normalized.setdefault("updated_at", normalized["created_at"])
         for competency in normalized["competencies"]:
@@ -145,7 +139,8 @@ class TrainingService:
                 continue
             for competency in stored_profile["competencies"]:
                 haystack = " ".join([competency["name"], competency["label"], competency["description"]]).lower()
-                if any(tag.lower() in haystack for tag in skill_tags):
+                normalized_tags = [tag.lower().replace(" ", "_") for tag in skill_tags]
+                if any(tag in haystack.replace(" ", "_") or tag.split("_")[0] in haystack for tag in normalized_tags):
                     if lesson_id not in competency["evidence_ids"]:
                         competency["evidence_ids"].append(lesson_id)
             stored_profile["updated_at"] = _now()
@@ -157,12 +152,8 @@ class TrainingService:
         competencies = " ".join(scenario.get("competencies", []))
         return _tokenize(" ".join([scenario.get("name", ""), scenario.get("goal", ""), competencies]))
 
-    def _skill_pack_for_profile(self, profile: dict | None) -> DataEngineerSkillPack | None:
-        if not profile:
-            return None
-        if profile.get("template_id") == "data_engineer" or profile.get("label") == "Data Engineer":
-            return DataEngineerSkillPack()
-        return None
+    def _learning_pack_for_profile(self, profile: dict | None = None) -> PersonalTwinLearningPack:
+        return PersonalTwinLearningPack()
 
     def _resolve_artifact_path(self, artifact_path: str, snapshot: dict | None = None) -> Path:
         requested = Path(artifact_path).expanduser()
@@ -215,32 +206,40 @@ class TrainingService:
             for template_id, template in PROFILE_TEMPLATES.items()
         ]
 
-    def get_skill_pack_definition(self) -> dict:
+    def get_adaptation_model_definition(self) -> dict:
         profile = self.get_active_profile()
-        skill_pack = self._skill_pack_for_profile(profile)
-        if not skill_pack:
-            return {
-                "status": "unconfigured",
-                "message": "No profession-specific skill pack is active for the current profile.",
-            }
-        return {"status": "active", "skill_pack": skill_pack.definition()}
+        learning_pack = self._learning_pack_for_profile(profile)
+        return {
+            "status": "active" if profile else "unconfigured",
+            "model": learning_pack.definition(),
+        }
 
     def activate_profile(
         self,
-        template_id: str,
+        template_id: str = "personal_twin",
         display_name: str | None = None,
         goals: list[str] | None = None,
         constraints: list[str] | None = None,
+        owner_name: str | None = None,
+        role_description: str | None = None,
+        communication_style: str | None = None,
+        values: list[str] | None = None,
+        decision_principles: list[str] | None = None,
     ) -> dict:
-        template = deepcopy(PROFILE_TEMPLATES.get(template_id, PROFILE_TEMPLATES["generic_professional"]))
+        template = deepcopy(PROFILE_TEMPLATES.get(template_id, PROFILE_TEMPLATES["personal_twin"]))
         profile = {
             "id": str(uuid.uuid4()),
-            "template_id": template_id if template_id in PROFILE_TEMPLATES else "generic_professional",
+            "template_id": template_id if template_id in PROFILE_TEMPLATES else "personal_twin",
             "label": template["label"],
-            "display_name": display_name or template["label"],
+            "display_name": display_name or owner_name or template["label"],
             "summary": template["summary"],
             "goals": goals or [],
             "constraints": constraints or ["Run entirely offline", "Use only local knowledge and tools"],
+            "owner_name": owner_name,
+            "role_description": role_description or "",
+            "communication_style": communication_style or "",
+            "values": values or [],
+            "decision_principles": decision_principles or [],
             "competencies": [
                 {**competency, "evidence_ids": []}
                 for competency in template["competencies"]
@@ -322,7 +321,9 @@ class TrainingService:
         profile = self.get_active_profile()
         if profile:
             goals = ", ".join(profile["goals"]) if profile["goals"] else "No explicit goals captured yet."
-            blocks.append(f"Active twin profile: {profile['display_name']} ({profile['label']}). Goals: {goals}")
+            role = profile.get("role_description") or "No role context captured yet."
+            style = profile.get("communication_style") or "No communication preference captured yet."
+            blocks.append(f"Active owner model: {profile['display_name']} ({profile['label']}). Goals: {goals}. Role context: {role}. Style: {style}")
         snapshot = self.get_latest_workspace_snapshot()
         if snapshot:
             frameworks = ", ".join(snapshot.get("frameworks", [])) or "local patterns"
@@ -339,8 +340,8 @@ class TrainingService:
         if not profile:
             return {
                 "status": "unconfigured",
-                "message": "No active profession profile. Create one before training.",
-                "next_steps": ["Select a profession template", "Define goals", "Import a local workspace or add domain lessons"],
+                "message": "No active owner profile. Create one before training.",
+                "next_steps": ["Create an owner profile", "Define goals, constraints, and style", "Import local artifacts or add personal lessons"],
             }
 
         next_steps = []
@@ -363,11 +364,11 @@ class TrainingService:
                     next_steps.append(task["next_step"])
 
         if not next_steps:
-            next_steps.append("Run domain evaluations and keep using Omni on live tasks so the self-review loop can refine it.")
+            next_steps.append("Run owner-model evaluations and keep correcting Omni on live tasks so the self-review loop can refine it.")
 
         deduped_steps = list(dict.fromkeys(next_steps))
         return {
-            "status": "ready" if len(deduped_steps) == 1 and "Run domain evaluations" in deduped_steps[0] else "training",
+            "status": "ready" if len(deduped_steps) == 1 and "Run owner-model evaluations" in deduped_steps[0] else "training",
             "profile": deepcopy(profile),
             "next_steps": deduped_steps,
         }
@@ -376,7 +377,7 @@ class TrainingService:
         self._refresh()
         profile = self._get_active_profile_locked()
         if not profile:
-            return {"status": "unconfigured", "readiness_score": 0.0, "gaps": ["No active profession profile."]}
+            return {"status": "unconfigured", "readiness_score": 0.0, "gaps": ["No active owner profile."]}
 
         competency_scores = []
         gaps = []
@@ -416,10 +417,10 @@ class TrainingService:
     def review_artifact(self, artifact_path: str) -> dict:
         snapshot = self.get_latest_workspace_snapshot()
         profile = self.get_active_profile()
-        skill_pack = self._skill_pack_for_profile(profile) or DataEngineerSkillPack()
+        learning_pack = self._learning_pack_for_profile(profile)
         resolved_path = self._resolve_artifact_path(artifact_path, snapshot)
         workspace_root = snapshot.get("workspace_path") if snapshot else resolved_path.parent
-        review = skill_pack.review_artifact(resolved_path, workspace_root=workspace_root)
+        review = learning_pack.review_artifact(resolved_path, workspace_root=workspace_root)
         review["profile_id"] = profile["id"] if profile else None
 
         findings = review.get("findings", [])
@@ -451,8 +452,10 @@ class TrainingService:
     def run_task_evaluation(self, persist: bool = True) -> dict:
         snapshot = self.get_latest_workspace_snapshot()
         profile = self.get_active_profile()
-        skill_pack = self._skill_pack_for_profile(profile) or DataEngineerSkillPack()
-        evaluation = skill_pack.evaluate_workspace(snapshot)
+        learning_pack = self._learning_pack_for_profile(profile)
+        lessons = self.export_snapshot().get("lessons", [])
+        interactions = self.get_recent_interactions(limit=50)
+        evaluation = learning_pack.evaluate_workspace(snapshot, profile=profile, lessons=lessons, interactions=interactions)
         evaluation["profile_id"] = profile["id"] if profile else None
         evaluation["workspace_path"] = snapshot.get("workspace_path") if snapshot else None
 
@@ -477,12 +480,12 @@ class TrainingService:
 
     def build_task_plan(self, task: str) -> str:
         profile = self.get_active_profile()
-        label = profile["label"] if profile else "General Professional"
+        label = profile["display_name"] if profile else "the owner"
         snapshot = self.get_latest_workspace_snapshot()
         framework_hint = ", ".join(snapshot.get("frameworks", [])) if snapshot else "local tools"
         plan = [
             f"Clarify the objective and success criteria for: {task}",
-            f"Map the request to {label.lower()} competencies already captured in local lessons.",
+            f"Map the request to {label}'s captured goals, preferences, and working standards.",
             f"Choose the lowest-risk implementation path that stays within verified offline knowledge and {framework_hint}.",
             "Produce a runbook, checklist, or response the user can act on immediately.",
         ]
@@ -694,7 +697,7 @@ class TrainingService:
                 "status": "unconfigured",
                 "trigger": trigger,
                 "readiness_score": 0.0,
-                "gaps": ["No active profession profile."],
+                "gaps": ["No active owner profile."],
                 "scenario_results": [],
                 "remediation_queue": [],
             }
