@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from src.memory.solid_state import SolidStateWiki
+from src.memory.vector_db import SolidStateWiki
 from src.learning.engine import ParameterExtractor
 from src.learning.reasoning import CognitiveReasoningEngine
 from src.learning.reinforcement import ReinforcementEngine
@@ -100,6 +100,117 @@ class QueryPayload(BaseModel):
     user_id: str = "default_user"
     spatial_coords: list[float] = None
 
+def _payload(point) -> dict:
+    return getattr(point, "payload", {}) or {}
+
+def _context_ids(points: list) -> list[str]:
+    return [str(getattr(point, "id", "")) for point in points if getattr(point, "id", None)]
+
+def _retrieve_semantic_context(query_params):
+    try:
+        similar_concepts = wiki.retrieve_similar(query_params, collection=wiki.semantic_collection, limit=5)
+        context_blocks = [
+            _payload(concept).get("concept", "")
+            for concept in similar_concepts
+            if _payload(concept).get("concept")
+        ]
+        if len(similar_concepts) >= 5:
+            cluster_vecs = [c.vector for c in similar_concepts]
+            cluster_ids = [c.id for c in similar_concepts]
+            neuroplasticity.evaluate_and_expand_cluster(cluster_vecs, cluster_ids)
+    except Exception:
+        similar_concepts = []
+        context_blocks = []
+    return similar_concepts, context_blocks
+
+def _safe_store_execution_learning(payload: QueryPayload, decision_json: dict, action_result: str, mcts_tree: str):
+    try:
+        learning_summary = (
+            f"Query: {payload.query}. Executed: {decision_json.get('action')}. "
+            f"Result: {action_result}. MCTS: {mcts_tree}"
+        )
+        learning_params = extractor.extract("text", learning_summary)
+        wiki.store_semantic(learning_params, metadata={
+            "concept": learning_summary,
+            "source_id": payload.user_id,
+            "type": "execution_learning"
+        })
+        return True
+    except Exception:
+        return False
+
+async def run_query(payload: QueryPayload) -> dict:
+    init_interfaces()
+    if daemon:
+        daemon.ping_activity()
+
+    query_params = extractor.extract("text", payload.query)
+
+    if payload.spatial_coords and len(payload.spatial_coords) == 3:
+        event_id = str(uuid.uuid4())
+        spatial.map_memory(event_id, payload.spatial_coords[0], payload.spatial_coords[1], payload.spatial_coords[2])
+
+    similar_concepts, context_blocks = _retrieve_semantic_context(query_params)
+    context_ids = _context_ids(similar_concepts)
+
+    tom_instruction = tom.model_audience(payload.user_id, payload.query, similar_concepts) if tom else "Answer clearly."
+    response, process_used = dual_process.route_query(payload.query, similar_concepts, tom_instruction)
+
+    if not response or response == "Cognitive LLM offline.":
+        response = reasoning.generate_response(payload.query, context_blocks)
+        process_used = "System 2"
+
+    decision_json = None
+    action_result = None
+    mcts_tree = None
+    action_paused = False
+    action_id = None
+
+    if payload.execute_action:
+        decision_json = action_engine.decide_action(payload.query, context_blocks)
+        prediction = world_model.mcts.find_golden_path(decision_json, similar_concepts, user_id=payload.user_id)
+        mcts_tree = prediction.get("prediction", "Tree collapsed")
+
+        if prediction.get("proceed", True):
+            avg_belief = 1.0
+            if similar_concepts:
+                b_sum = sum([
+                    _payload(c).get("bayes_alpha", 1.0)
+                    / max((_payload(c).get("bayes_alpha", 1.0) + _payload(c).get("bayes_beta", 1.0)), 1)
+                    for c in similar_concepts
+                ])
+                avg_belief = b_sum / len(similar_concepts)
+
+            if authority.evaluate_authority(prediction, avg_belief):
+                action_result = execution_router.execute_action(decision_json)
+                _safe_store_execution_learning(payload, decision_json, action_result, mcts_tree)
+            else:
+                action_paused = True
+                action_id = str(uuid.uuid4())
+                authority.queue_action(action_id, decision_json)
+                action_result = "Confidence below threshold. Awaiting human approval."
+        else:
+            action_result = f"VETOED: {prediction.get('prediction')}"
+
+    if context_ids and tom:
+        try:
+            tom.log_interaction(payload.user_id, context_ids)
+        except Exception:
+            pass
+
+    return {
+        "query": payload.query,
+        "response": response,
+        "semantic_context_used": len(context_blocks),
+        "context_ids": context_ids,
+        "process_used": process_used,
+        "action_decided": decision_json,
+        "mcts_simulation": mcts_tree,
+        "action_result": action_result,
+        "action_paused": action_paused,
+        "action_id": action_id,
+    }
+
 async def event_stream_generator(payload: QueryPayload):
     init_interfaces()
     daemon.ping_activity() # Wake up daemon
@@ -116,18 +227,9 @@ async def event_stream_generator(payload: QueryPayload):
     yield f"data: {json.dumps({'event': 'status', 'data': 'Retrieving Semantic Context...'})}\n\n"
     await asyncio.sleep(0.1)
     
-    try:
-        similar_concepts = wiki.retrieve_similar(query_params, collection=wiki.semantic_collection, limit=5)
-        context_blocks = [c.payload.get("concept", "") for c in similar_concepts if "concept" in c.payload]
-        if len(similar_concepts) >= 5:
-            cluster_vecs = [c.vector for c in similar_concepts]
-            cluster_ids = [c.id for c in similar_concepts]
-            neuroplasticity.evaluate_and_expand_cluster(cluster_vecs, cluster_ids)
-    except Exception as e:
-        context_blocks = []
-        similar_concepts = []
+    similar_concepts, context_blocks = _retrieve_semantic_context(query_params)
         
-    context_ids = [c.id for c in similar_concepts]
+    context_ids = _context_ids(similar_concepts)
     yield f"data: {json.dumps({'event': 'context', 'data': context_blocks})}\n\n"
     
     action_result = None
@@ -168,15 +270,14 @@ async def event_stream_generator(payload: QueryPayload):
             yield f"data: {json.dumps({'event': 'action_vetoed', 'data': prediction.get('prediction')})}\n\n"
     
     if action_result:
-        try:
-            learning_summary = f"Query: {payload.query}. Executed: {decision_json.get('action')}. Result: {action_result}. MCTS: {mcts_tree}"
-            learning_params = extractor.extract("text", learning_summary)
-            wiki.store_semantic(learning_summary, learning_params, payload.user_id)
+        if _safe_store_execution_learning(payload, decision_json, action_result, mcts_tree):
             yield f"data: {json.dumps({'event': 'learning_stored', 'data': 'Execution correlated and compressed into semantic parameter space.'})}\n\n"
-        except Exception as e:
-            pass
             
     yield f"data: {json.dumps({'event': 'complete', 'context_ids': context_ids})}\n\n"
+
+@router.post("/query")
+async def generate_response(payload: QueryPayload):
+    return await run_query(payload)
 
 @router.post("/query/stream")
 async def stream_generation(payload: QueryPayload):

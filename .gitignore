@@ -2,3 +2,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+.venv/
+.pytest_cache/
+node_modules/
+.next/
+dist/
+build/
+target/
+*.egg-info/
+*.zip
+omnitwin_genesis_seed.zip
+src/execution/plugins/

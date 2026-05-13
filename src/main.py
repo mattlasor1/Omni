@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from src.ingestion.api import router as ingestion_router
 from src.ingestion.state_api import router as state_router
 from src.generation.api import router as generation_router
@@ -12,6 +12,17 @@ app = FastAPI(
     title="OmniTwin API & Dashboard",
     description="Comprehensive High-speed gateway, cognitive reasoning, and memory visualization.",
     version="0.3.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # API Routers

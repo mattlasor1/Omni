@@ -2,6 +2,8 @@ import os
 from fastapi import APIRouter
 from src.memory.cache import LivestreamCache
 from src.memory.vector_db import SolidStateWiki
+from src.learning.state import InternalStateEngine
+from src.maintenance.circadian import CircadianEngine
 
 router = APIRouter()
 cache = None
@@ -82,12 +84,16 @@ async def get_system_state():
         thalamic_ratio = float(get_cache().client.get("omnitwin:metrics:thalamic_filter_ratio") or 0.0)
         pruned_count = int(get_cache().client.get("omnitwin:metrics:memories_pruned") or 0)
         
+        axioms_compressed = int(get_cache().client.get("omnitwin:metrics:axioms_compressed") or 0)
+        prime_directive = get_cache().client.get("omnitwin:metrics:prime_directive") or ""
         # Fetch Omega Convergence
         omega = float(get_cache().client.get("omnitwin:metrics:omega_convergence") or 0.0)
     except:
         self_play_count = 0
         epiphanies = 0
         seeker_dispatches = 0
+        axioms_compressed = 0
+        prime_directive = ""
         thalamic_ratio = 0.0
         pruned_count = 0
         omega = 0.0
@@ -102,10 +108,12 @@ async def get_system_state():
         "emotional_state": state_summary,
         "biological_state": ce.state,
         "energy": round(ce.energy, 1),
+        "prime_directive": prime_directive,
         "exponential_metrics": {
             "self_play_count": self_play_count,
             "epiphanies": epiphanies,
-            "seeker_dispatches": seeker_dispatches
+            "seeker_dispatches": seeker_dispatches,
+            "axioms_compressed": axioms_compressed
         },
         "philosophical_metrics": {
             "thalamic_ratio": round(thalamic_ratio, 2),

@@ -2,6 +2,7 @@ import os
 import requests
 from typing import List, Dict, Any
 from src.memory.vector_db import SolidStateWiki
+from src.swarm.synchronicity import SynchronicityEngine
 
 class SwarmProtocol:
     """
@@ -14,6 +15,11 @@ class SwarmProtocol:
         # In a real swarm, this would be a dynamic list via Consul or etcd.
         self.known_peers = os.getenv("SWARM_PEERS", "").split(",")
         self.node_id = os.getenv("NODE_ID", "primary_core_node")
+        self.synchronicity = SynchronicityEngine(wiki_interface)
+        self.entangled_peers = self.synchronicity.entangled_peers
+
+    def calculate_resonance(self) -> list:
+        return self.synchronicity.calculate_resonance()
 
     def broadcast_new_semantic_concept(self, memory_id: str, vector: list, metadata: dict):
         """

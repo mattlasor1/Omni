@@ -3,6 +3,40 @@ import time
 from typing import Any
 import psutil
 
+class CircadianEngine:
+    """
+    Compatibility biological state engine used by the maintenance and biometric
+    layers. It models coarse energy/fatigue state without depending on the
+    perpetual async daemon.
+    """
+    def __init__(self):
+        self.energy = 100.0
+        self.state = "AWAKE"
+        self.last_update = time.time()
+
+    def tick(self, active_processing_load: int = 0):
+        now = time.time()
+        elapsed = now - self.last_update
+        self.last_update = now
+
+        if self.state == "ASLEEP":
+            self.energy = min(100.0, self.energy + (elapsed * 5.0))
+            if self.energy >= 100.0:
+                self.state = "AWAKE"
+        else:
+            base_drain = elapsed * 0.1
+            load_drain = active_processing_load * 0.5
+            self.energy = max(0.0, self.energy - (base_drain + load_drain))
+            if self.energy <= 0.0:
+                self.state = "ASLEEP"
+            elif self.energy < 30.0:
+                self.state = "FATIGUED"
+            else:
+                self.state = "AWAKE"
+
+    def can_process_sensory_input(self) -> bool:
+        return self.state != "ASLEEP"
+
 class PerpetualCognitiveDaemon:
     """
     The True Continuous Learning Daemon ("Dream State").

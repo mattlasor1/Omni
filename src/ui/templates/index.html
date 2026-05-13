@@ -285,7 +285,7 @@
                 document.getElementById('metric-selfplay').innerText = data.exponential_metrics.self_play_count;
                 document.getElementById('metric-epiphanies').innerText = data.exponential_metrics.epiphanies;
                 document.getElementById('metric-seekers').innerText = data.exponential_metrics.seeker_dispatches;
-                document.getElementById('metric-axioms').innerText = data.exponential_metrics.axioms_compressed;
+                document.getElementById('metric-axioms').innerText = data.exponential_metrics.axioms_compressed || 0;
                 
                 // Map Philosophical Metrics
                 document.getElementById('metric-thalamic').innerText = data.philosophical_metrics.thalamic_ratio;

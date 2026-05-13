@@ -21,7 +21,12 @@ class ZeroConfigSwarm:
         
     def start(self):
         self.running = True
-        self._setup_socket()
+        try:
+            self._setup_socket()
+        except OSError as e:
+            self.running = False
+            print(f"ZeroConfig Swarm unavailable: {e}")
+            return
         
         # Start listening thread
         self.listener_thread = threading.Thread(target=self._listen, daemon=True)
