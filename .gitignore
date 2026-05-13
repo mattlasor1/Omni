@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 node_modules/
 .next/
+frontend/out/
 dist/
 build/
 target/
@@ -18,4 +19,5 @@ data/cache_store.json
 data/vector_store.json
 data/training_state.json
 data/logs/
+electron_app/release-builds/
 tests/tmp_data/

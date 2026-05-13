@@ -9,6 +9,16 @@ on:
 jobs:
   python:
     runs-on: ubuntu-latest
+    env:
+      OMNI_OFFLINE_STRICT: "true"
+      OMNI_ENABLE_MODEL_DOWNLOADS: "false"
+      OMNI_ENABLE_SWARM: "false"
+      OMNI_ALLOW_LAN: "false"
+      OMNI_ENABLE_EXTERNAL_DEVICES: "false"
+      OMNI_ALLOW_EXTERNAL_NETWORK: "false"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,3 +45,20 @@ jobs:
         run: npm install
       - name: Build frontend
         run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  desktop:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: electron_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install desktop dependencies
+        run: npm install
+      - name: Audit desktop runtime dependencies
+        run: npm audit

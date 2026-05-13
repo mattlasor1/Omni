@@ -1,5 +1,6 @@
 FROM node:18-alpine
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY package*.json ./
 RUN npm install
 COPY . .

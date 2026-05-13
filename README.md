@@ -12,12 +12,14 @@ OmniTwin is an offline-first digital twin runtime for building a profession-shap
 The repo now ships with a stricter local-first core:
 
 - **Offline defaults:** no model downloads, no swarm networking, no external device calls unless you explicitly opt in
+- **Runtime network guard:** strict offline mode blocks non-loopback Python socket access while keeping local backend/frontend traffic available
 - **Embedded fallbacks:** local JSON-backed cache and vector memory replace Redis/Qdrant when those services are unavailable
 - **Profession training layer:** create a domain profile, add lessons, track competency coverage, and measure readiness
 - **Continuous self-review:** record live interactions, score evaluation scenarios, generate remediation queues, and synthesize local reflection notes without leaving the machine
 - **Workspace ingestion:** point Omni at a local repo or runbook directory and let it extract lessons from SQL, YAML, Python, and docs
 - **Local execution tools:** query local lessons, generate task plans, inspect profile status, and keep execution grounded in offline-safe actions
 - **Desktop startup:** Electron now boots the FastAPI backend and Next frontend itself instead of assuming a Docker cluster
+- **Desktop packaging:** the Windows package includes the backend source, static frontend bundle, local venv, and model directory resources
 
 ## Core Intent
 
@@ -51,6 +53,15 @@ chmod +x install.sh launch.sh
 install.bat
 launch.bat
 ```
+
+To build the Windows desktop bundle after installation:
+
+```bat
+cd electron_app
+npm run pack
+```
+
+The package is written under `electron_app\release-builds\OmniTwin-win32-x64`.
 
 ## Local Model Bundles
 

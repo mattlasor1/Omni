@@ -3,15 +3,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from src.runtime import get_settings, install_network_guard
+
+settings = get_settings()
+install_network_guard(settings)
+
 from src.ingestion.api import router as ingestion_router
 from src.ingestion.state_api import router as state_router
 from src.generation.api import router as generation_router
 from src.swarm.api import router as swarm_router
 from src.training.api import router as training_router
-from src.runtime import get_settings
 from src.maintenance.local_scheduler import get_local_scheduler
 
-settings = get_settings()
 scheduler = get_local_scheduler()
 
 
@@ -30,7 +33,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.offline_strict else settings.cors_origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

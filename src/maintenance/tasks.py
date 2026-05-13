@@ -28,6 +28,9 @@ from src.execution.hardware_somatic import HardwareActuationInterface
 from src.learning.singularity import SingularityEngine
 from src.execution.animism import AnimismProtocol
 from src.execution.genesis import GenesisSeedProtocol
+from src.runtime import get_settings, install_network_guard
+
+install_network_guard(get_settings())
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("omnitwin_maintenance", broker=REDIS_URL)

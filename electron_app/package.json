@@ -5,9 +5,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-packager . OmniTwin --platform=all --arch=x64 --out=release-builds --overwrite"
+    "pack": "electron-packager . OmniTwin --platform=win32 --arch=x64 --out=release-builds --overwrite --extra-resource=../src --extra-resource=../frontend/out --extra-resource=../models --extra-resource=../.venv --extra-resource=../requirements.txt --extra-resource=../.env.example"
   },
-  "dependencies": {
-    "electron": "^25.3.0"
+  "devDependencies": {
+    "@electron/packager": "^18.4.4",
+    "electron": "^42.0.1"
   }
 }

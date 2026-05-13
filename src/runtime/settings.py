@@ -22,6 +22,7 @@ class OmniSettings:
     cache_store_path: Path
     training_store_path: Path
     offline_strict: bool
+    allowed_network_hosts: tuple[str, ...]
     enable_model_downloads: bool
     enable_swarm: bool
     allow_lan: bool
@@ -73,6 +74,11 @@ def get_settings() -> OmniSettings:
         cache_store_path=data_dir / "cache_store.json",
         training_store_path=data_dir / "training_state.json",
         offline_strict=_as_bool(os.getenv("OMNI_OFFLINE_STRICT"), True),
+        allowed_network_hosts=tuple(
+            host.strip().lower()
+            for host in os.getenv("OMNI_ALLOWED_NETWORK_HOSTS", "").split(",")
+            if host.strip()
+        ),
         enable_model_downloads=_as_bool(os.getenv("OMNI_ENABLE_MODEL_DOWNLOADS"), False),
         enable_swarm=_as_bool(os.getenv("OMNI_ENABLE_SWARM"), False),
         allow_lan=_as_bool(os.getenv("OMNI_ALLOW_LAN"), False),

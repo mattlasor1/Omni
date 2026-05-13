@@ -1,17 +1,18 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, session } = require("electron");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const { spawn } = require("child_process");
 
-const projectRoot = path.resolve(__dirname, "..");
-const frontendDir = path.join(projectRoot, "frontend");
+const projectRoot = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, "..");
+const frontendDir = app.isPackaged ? path.join(projectRoot, "out") : path.join(projectRoot, "frontend");
 const logDir = path.join(projectRoot, "data", "logs");
 const isWindows = process.platform === "win32";
 const npmCommand = isWindows ? "npm.cmd" : "npm";
 
 let backendProcess = null;
 let frontendProcess = null;
+let staticFrontendServer = null;
 let mainWindow = null;
 let backendReady = false;
 let frontendReady = false;
@@ -20,6 +21,18 @@ let startupFailed = false;
 const logs = {
   backend: "",
   frontend: "",
+};
+
+const offlineEnv = {
+  OMNI_OFFLINE_STRICT: "true",
+  OMNI_ENABLE_MODEL_DOWNLOADS: "false",
+  OMNI_ENABLE_SWARM: "false",
+  OMNI_ALLOW_LAN: "false",
+  OMNI_ENABLE_EXTERNAL_DEVICES: "false",
+  HF_HUB_OFFLINE: "1",
+  TRANSFORMERS_OFFLINE: "1",
+  HF_DATASETS_OFFLINE: "1",
+  NEXT_TELEMETRY_DISABLED: "1",
 };
 
 function ensureLogDir() {
@@ -44,6 +57,25 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function isLocalUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (["file:", "data:", "devtools:"].includes(parsed.protocol)) {
+      return true;
+    }
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
+  } catch (_) {
+    return false;
+  }
+}
+
+function installElectronNetworkGuard() {
+  const filter = { urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*"] };
+  session.defaultSession.webRequest.onBeforeRequest(filter, (details, callback) => {
+    callback({ cancel: !isLocalUrl(details.url) });
+  });
 }
 
 function updateSplash(status, detail = "") {
@@ -115,7 +147,7 @@ function monitorProcess(child, name, onFailure) {
 function spawnService(command, args, cwd, name) {
   const child = spawn(command, args, {
     cwd,
-    env: { ...process.env },
+    env: { ...process.env, ...offlineEnv },
     shell: false,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -151,6 +183,59 @@ function requestStatus(url) {
   });
 }
 
+function contentTypeFor(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  const types = {
+    ".css": "text/css",
+    ".html": "text/html",
+    ".ico": "image/x-icon",
+    ".js": "application/javascript",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain",
+    ".webp": "image/webp",
+  };
+  return types[extension] || "application/octet-stream";
+}
+
+function startStaticFrontendServer(rootDir) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(path.join(rootDir, "index.html"))) {
+      reject(new Error(`Static frontend bundle not found at ${rootDir}. Run npm run build in frontend first.`));
+      return;
+    }
+
+    staticFrontendServer = http.createServer((req, res) => {
+      const requestUrl = new URL(req.url || "/", "http://127.0.0.1:3000");
+      const decodedPath = decodeURIComponent(requestUrl.pathname);
+      const safeRoot = path.resolve(rootDir);
+      const normalizedPath = path.normalize(decodedPath).replace(/^[/\\]+/, "");
+      let filePath = path.resolve(safeRoot, normalizedPath);
+      if (filePath !== safeRoot && !filePath.startsWith(`${safeRoot}${path.sep}`)) {
+        res.writeHead(403);
+        res.end("Forbidden");
+        return;
+      }
+      if (decodedPath === "/" || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+        filePath = path.join(safeRoot, "index.html");
+      }
+      fs.readFile(filePath, (error, data) => {
+        if (error) {
+          res.writeHead(404);
+          res.end("Not found");
+          return;
+        }
+        res.writeHead(200, { "Content-Type": contentTypeFor(filePath) });
+        res.end(data);
+      });
+    });
+
+    staticFrontendServer.once("error", reject);
+    staticFrontendServer.listen(3000, "127.0.0.1", () => resolve());
+  });
+}
+
 async function waitForServer(check, timeoutMs, serviceName) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -171,6 +256,13 @@ async function waitForServer(check, timeoutMs, serviceName) {
 function stopService(child) {
   if (child && !child.killed) {
     child.kill();
+  }
+}
+
+function stopStaticFrontend() {
+  if (staticFrontendServer) {
+    staticFrontendServer.close();
+    staticFrontendServer = null;
   }
 }
 
@@ -207,13 +299,17 @@ async function bootstrapDesktop() {
     );
     backendReady = true;
 
-    updateSplash("Starting frontend", "Launching the Next.js workbench...");
-    frontendProcess = spawnService(
-      npmCommand,
-      ["run", fs.existsSync(path.join(frontendDir, ".next", "BUILD_ID")) ? "start" : "dev"],
-      frontendDir,
-      "frontend"
-    );
+    updateSplash("Starting frontend", "Launching the local workbench...");
+    if (app.isPackaged) {
+      await startStaticFrontendServer(frontendDir);
+    } else {
+      frontendProcess = spawnService(
+        npmCommand,
+        ["run", fs.existsSync(path.join(frontendDir, ".next", "BUILD_ID")) ? "start" : "dev"],
+        frontendDir,
+        "frontend"
+      );
+    }
 
     await waitForServer(
       async () => {
@@ -235,6 +331,7 @@ async function bootstrapDesktop() {
 }
 
 app.whenReady().then(() => {
+  installElectronNetworkGuard();
   ensureLogDir();
   createWindow();
   bootstrapDesktop();
@@ -250,6 +347,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  stopStaticFrontend();
   stopService(frontendProcess);
   stopService(backendProcess);
 });

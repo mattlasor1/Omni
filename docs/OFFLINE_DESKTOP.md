@@ -6,6 +6,9 @@ OmniTwin now defaults to an offline desktop posture:
 - `OMNI_ENABLE_MODEL_DOWNLOADS=false`
 - `OMNI_ENABLE_SWARM=false`
 - `OMNI_ENABLE_EXTERNAL_DEVICES=false`
+- `OMNI_ALLOW_EXTERNAL_NETWORK=false`
+
+Strict offline mode installs a runtime network guard in the backend. It allows loopback traffic for `127.0.0.1` and `localhost`, then blocks non-local socket access before a request can leave the machine. The Electron shell also blocks non-local `http`, `https`, `ws`, and `wss` requests from the renderer.
 
 ## Local Persistence
 
@@ -50,3 +53,18 @@ To stay fully offline and still get higher-quality local inference, bundle local
 - `models/minilm`
 
 Without those bundles, OmniTwin uses offline heuristic fallbacks for response generation and embedding.
+
+## Desktop Package
+
+Run `npm run build` in `frontend` before packaging. The Next frontend exports static files to `frontend/out`, and the packaged Electron app serves those files from a local loopback HTTP server instead of starting `npm`.
+
+The Windows package command in `electron_app` includes:
+
+- `src`
+- `frontend/out`
+- `.venv`
+- `models`
+- `requirements.txt`
+- `.env.example`
+
+That makes the release folder runnable as a local desktop bundle on the same platform after dependencies have been installed.

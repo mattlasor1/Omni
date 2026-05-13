@@ -15,6 +15,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
+set NEXT_TELEMETRY_DISABLED=1
+set HF_HUB_OFFLINE=1
+set TRANSFORMERS_OFFLINE=1
+set HF_DATASETS_OFFLINE=1
+
 python -m venv .venv
 call .venv\Scripts\activate
 python -m pip install --upgrade pip
