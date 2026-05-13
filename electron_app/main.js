@@ -6,11 +6,25 @@ const { spawn } = require("child_process");
 
 const projectRoot = path.resolve(__dirname, "..");
 const frontendDir = path.join(projectRoot, "frontend");
+const logDir = path.join(projectRoot, "data", "logs");
 const isWindows = process.platform === "win32";
 const npmCommand = isWindows ? "npm.cmd" : "npm";
 
 let backendProcess = null;
 let frontendProcess = null;
+let mainWindow = null;
+let backendReady = false;
+let frontendReady = false;
+let startupFailed = false;
+
+const logs = {
+  backend: "",
+  frontend: "",
+};
+
+function ensureLogDir() {
+  fs.mkdirSync(logDir, { recursive: true });
+}
 
 function resolvePython() {
   const venvPython = isWindows
@@ -19,37 +33,139 @@ function resolvePython() {
   return fs.existsSync(venvPython) ? venvPython : "python";
 }
 
-function spawnService(command, args, cwd, extraEnv = {}) {
-  return spawn(command, args, {
-    cwd,
-    env: { ...process.env, ...extraEnv },
-    shell: false,
-    stdio: "ignore",
+function appendLog(name, chunk) {
+  const text = chunk.toString();
+  logs[name] = `${logs[name]}${text}`.slice(-12000);
+  fs.appendFileSync(path.join(logDir, `${name}.log`), text);
+}
+
+function escapeHtml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function updateSplash(status, detail = "") {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const payload = JSON.stringify({ status, detail });
+  mainWindow.webContents
+    .executeJavaScript(
+      `(() => {
+        const payload = ${payload};
+        const statusEl = document.getElementById("status");
+        const detailEl = document.getElementById("detail");
+        if (statusEl) statusEl.textContent = payload.status;
+        if (detailEl) detailEl.textContent = payload.detail;
+      })();`,
+      true
+    )
+    .catch(() => {});
+}
+
+function showFailure(serviceName, detail) {
+  startupFailed = true;
+  const backendLog = escapeHtml(logs.backend || "No backend logs captured.");
+  const frontendLog = escapeHtml(logs.frontend || "No frontend logs captured.");
+  const html = `
+    <html>
+      <head>
+        <title>OmniTwin Startup Failure</title>
+        <style>
+          body { font-family: Segoe UI, Arial, sans-serif; background: #111827; color: #e5e7eb; padding: 24px; }
+          h1 { margin-top: 0; color: #f87171; }
+          pre { background: #0b1220; padding: 12px; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+          .section { margin-top: 18px; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(serviceName)} failed to start</h1>
+        <p>${escapeHtml(detail)}</p>
+        <p>Logs were written to ${escapeHtml(logDir)}.</p>
+        <div class="section">
+          <strong>Backend log tail</strong>
+          <pre>${backendLog}</pre>
+        </div>
+        <div class="section">
+          <strong>Frontend log tail</strong>
+          <pre>${frontendLog}</pre>
+        </div>
+      </body>
+    </html>
+  `;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  }
+}
+
+function monitorProcess(child, name, onFailure) {
+  child.stdout?.on("data", (chunk) => appendLog(name, chunk));
+  child.stderr?.on("data", (chunk) => appendLog(name, chunk));
+  child.on("error", (error) => onFailure(`${name} process error: ${error.message}`));
+  child.on("exit", (code) => {
+    const ready = name === "backend" ? backendReady : frontendReady;
+    if (!ready && !startupFailed) {
+      onFailure(`${name} exited before startup completed (code ${code ?? "unknown"}).`);
+    }
   });
 }
 
-function startBackend() {
-  if (backendProcess) {
-    return;
-  }
-  backendProcess = spawnService(
-    resolvePython(),
-    ["-m", "uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "8000"],
-    projectRoot
-  );
+function spawnService(command, args, cwd, name) {
+  const child = spawn(command, args, {
+    cwd,
+    env: { ...process.env },
+    shell: false,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  monitorProcess(child, name, (message) => showFailure(name, message));
+  return child;
 }
 
-function startFrontend() {
-  if (frontendProcess) {
-    return;
+function requestJson(url) {
+  return new Promise((resolve, reject) => {
+    http
+      .get(url, (res) => {
+        let body = "";
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          try {
+            resolve({ statusCode: res.statusCode, body: body ? JSON.parse(body) : {} });
+          } catch (error) {
+            reject(error);
+          }
+        });
+      })
+      .on("error", reject);
+  });
+}
+
+function requestStatus(url) {
+  return new Promise((resolve, reject) => {
+    http
+      .get(url, (res) => resolve(res.statusCode))
+      .on("error", reject);
+  });
+}
+
+async function waitForServer(check, timeoutMs, serviceName) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (startupFailed) {
+      throw new Error(`${serviceName} startup aborted.`);
+    }
+    try {
+      const ok = await check();
+      if (ok) {
+        return;
+      }
+    } catch (_) {}
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  const hasBuild = fs.existsSync(path.join(frontendDir, ".next", "BUILD_ID"));
-  frontendProcess = spawnService(
-    npmCommand,
-    ["run", hasBuild ? "start" : "dev"],
-    frontendDir,
-    { HOSTNAME: "127.0.0.1", PORT: "3000" }
-  );
+  throw new Error(`${serviceName} did not become ready within ${timeoutMs / 1000} seconds.`);
 }
 
 function stopService(child) {
@@ -58,23 +174,8 @@ function stopService(child) {
   }
 }
 
-function waitForServer(url, onReady) {
-  const check = () => {
-    http
-      .get(url, (res) => {
-        if (res.statusCode === 200) {
-          onReady();
-        } else {
-          setTimeout(check, 1000);
-        }
-      })
-      .on("error", () => setTimeout(check, 1000));
-  };
-  check();
-}
-
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
     title: "OmniTwin Offline Workbench",
@@ -83,19 +184,67 @@ function createWindow() {
       contextIsolation: false,
     },
   });
+  mainWindow.loadFile("splash.html");
+}
 
-  win.loadFile("splash.html");
-  waitForServer("http://127.0.0.1:3000", () => win.loadURL("http://127.0.0.1:3000"));
+async function bootstrapDesktop() {
+  try {
+    updateSplash("Starting backend", "Booting FastAPI and local maintenance runtime...");
+    backendProcess = spawnService(
+      resolvePython(),
+      ["-m", "uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "8000"],
+      projectRoot,
+      "backend"
+    );
+
+    await waitForServer(
+      async () => {
+        const response = await requestJson("http://127.0.0.1:8000/health");
+        return response.statusCode === 200 && response.body.status === "healthy";
+      },
+      45000,
+      "Backend"
+    );
+    backendReady = true;
+
+    updateSplash("Starting frontend", "Launching the Next.js workbench...");
+    frontendProcess = spawnService(
+      npmCommand,
+      ["run", fs.existsSync(path.join(frontendDir, ".next", "BUILD_ID")) ? "start" : "dev"],
+      frontendDir,
+      "frontend"
+    );
+
+    await waitForServer(
+      async () => {
+        const statusCode = await requestStatus("http://127.0.0.1:3000");
+        return statusCode === 200;
+      },
+      60000,
+      "Frontend"
+    );
+    frontendReady = true;
+
+    updateSplash("Opening workbench", "Desktop services are online.");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.loadURL("http://127.0.0.1:3000");
+    }
+  } catch (error) {
+    showFailure("Startup", error.message);
+  }
 }
 
 app.whenReady().then(() => {
-  startBackend();
-  startFrontend();
+  ensureLogDir();
   createWindow();
+  bootstrapDesktop();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+      if (frontendReady) {
+        mainWindow.loadURL("http://127.0.0.1:3000");
+      }
     }
   });
 });

@@ -7,6 +7,7 @@ import numpy as np
 
 os.environ["QDRANT_HOST"] = "localhost"
 os.environ["REDIS_HOST"] = "localhost"
+os.environ["OMNI_ENABLE_LOCAL_MAINTENANCE"] = "false"
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "tmp_data")
 if os.path.exists(TEST_DATA_DIR):
     shutil.rmtree(TEST_DATA_DIR)

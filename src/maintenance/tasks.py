@@ -172,7 +172,7 @@ def process_cache_to_memory(batch_size: int = 100):
     # Check for Merovingian shift during normal ingestion mapping
     if state_engine.check_merovingian_shift():
         # Inject an arbitrary learning task to break fixation
-        autonomous_reflection.delay(sample_size=50, force_merovingian=True)
+        autonomous_reflection(sample_size=50, force_merovingian=True)
         
     return f"Processed {len(processed_ids)} records."
 

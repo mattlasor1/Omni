@@ -17,4 +17,5 @@ models/
 data/cache_store.json
 data/vector_store.json
 data/training_state.json
+data/logs/
 tests/tmp_data/

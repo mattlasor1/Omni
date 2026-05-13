@@ -153,6 +153,30 @@ def _safe_store_execution_learning(payload: QueryPayload, decision_json: dict, a
     except Exception:
         return False
 
+def _safe_record_interaction(
+    payload: QueryPayload,
+    response: str,
+    context_blocks: list[str],
+    process_used: str,
+    decision_json: dict | None,
+    action_result: str | None,
+    action_paused: bool,
+):
+    if training is None:
+        return
+    try:
+        training.record_interaction(
+            query=payload.query,
+            response=response,
+            context_blocks=context_blocks,
+            process_used=process_used,
+            action_decided=decision_json,
+            action_result=action_result,
+            action_paused=action_paused,
+        )
+    except Exception:
+        pass
+
 async def run_query(payload: QueryPayload) -> dict:
     init_interfaces()
     if daemon:
@@ -214,6 +238,16 @@ async def run_query(payload: QueryPayload) -> dict:
             tom.log_interaction(payload.user_id, context_ids)
         except Exception:
             pass
+
+    _safe_record_interaction(
+        payload=payload,
+        response=response,
+        context_blocks=context_blocks,
+        process_used=process_used,
+        decision_json=decision_json,
+        action_result=action_result,
+        action_paused=action_paused,
+    )
 
     return {
         "query": payload.query,
@@ -300,6 +334,16 @@ async def event_stream_generator(payload: QueryPayload):
     if action_result:
         if _safe_store_execution_learning(payload, decision_json, action_result, mcts_tree):
             yield f"data: {json.dumps({'event': 'learning_stored', 'data': 'Execution correlated and compressed into semantic parameter space.'})}\n\n"
+
+    _safe_record_interaction(
+        payload=payload,
+        response=response,
+        context_blocks=context_blocks,
+        process_used=process_used,
+        decision_json=decision_json if payload.execute_action else None,
+        action_result=action_result,
+        action_paused=False,
+    )
             
     yield f"data: {json.dumps({'event': 'complete', 'context_ids': context_ids})}\n\n"
 

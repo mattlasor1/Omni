@@ -4,6 +4,7 @@ from src.memory.cache import LivestreamCache
 from src.memory.vector_db import SolidStateWiki
 from src.learning.state import InternalStateEngine
 from src.maintenance.circadian import CircadianEngine
+from src.maintenance.local_scheduler import get_local_scheduler
 from src.training.service import TrainingService
 from src.runtime import get_settings
 
@@ -14,6 +15,7 @@ state_engine = None
 circadian_engine = None
 training_service = TrainingService()
 settings = get_settings()
+scheduler = get_local_scheduler()
 
 def get_cache():
     global cache
@@ -130,7 +132,10 @@ async def get_system_state():
             "profile": training_service.get_active_profile(),
             "evaluation": training_service.evaluate_readiness(persist=False) if training_service.get_active_profile() else {"status": "unconfigured", "readiness_score": 0.0},
             "workspace": training_service.get_latest_workspace_snapshot(),
+            "self_review": training_service.get_latest_self_review(),
+            "remediation_queue": training_service.get_remediation_queue(limit=5),
         },
+        "maintenance": scheduler.get_status(),
     }
 
 @router.get("/logos")
@@ -174,18 +179,16 @@ async def get_prophecy_stream():
 @router.post("/maintenance/nemesis")
 async def trigger_nemesis_strike():
     try:
-        from src.maintenance.tasks import trigger_nemesis
-        trigger_nemesis.delay()
-        return {"status": "success", "message": "Nemesis strike triggered."}
+        scheduler.run_now("nemesis")
+        return {"status": "success", "message": "Nemesis strike queued in local maintenance scheduler."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 @router.post("/maintenance/growth")
 async def trigger_exponential_growth():
     try:
-        from src.maintenance.tasks import exponential_growth_cycle
-        exponential_growth_cycle.delay()
-        return {"status": "success", "message": "Exponential Growth cycle (Self-Play & Pollination) triggered."}
+        scheduler.run_now("growth")
+        return {"status": "success", "message": "Exponential Growth cycle queued in local maintenance scheduler."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -211,15 +214,20 @@ async def get_curiosity_stream():
     except Exception as e:
         return {"questions": []}
 
+
+@router.post("/maintenance/review")
+async def trigger_self_review():
+    try:
+        scheduler.run_now("review")
+        return {"status": "success", "message": "Self-review cycle queued in local maintenance scheduler."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # Endpoint to trigger reflection manually from UI for demo purposes
 @router.post("/maintenance/reflect")
 async def trigger_reflection():
     try:
-        from src.maintenance.tasks import autonomous_reflection, process_cache_to_memory
-        # Process cache first
-        process_cache_to_memory.delay()
-        # Trigger reflection
-        autonomous_reflection.delay()
-        return {"status": "success", "message": "Reflection loop triggered in background."}
+        scheduler.run_now("reflect")
+        return {"status": "success", "message": "Reflection loop queued in local maintenance scheduler."}
     except Exception as e:
         return {"status": "error", "message": str(e)}

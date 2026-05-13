@@ -48,6 +48,12 @@ def test_training_search_and_plan():
     assert eval_res.status_code == 200
     assert "readiness_score" in eval_res.json()
 
+    review_res = client.post("/api/v1/training/self-review")
+    assert review_res.status_code == 200
+    review = review_res.json()
+    assert "scenario_results" in review
+    assert "remediation_queue" in review
+
 
 def test_workspace_analysis_and_import(tmp_path):
     workspace = tmp_path / "analytics_repo"
@@ -92,8 +98,54 @@ def test_workspace_analysis_and_import(tmp_path):
     imported_report = import_res.json()["report"]
     assert imported_report["imported_lessons"] >= 2
 
+    second_import_res = client.post(
+        "/api/v1/training/workspace/import",
+        json={"path": str(workspace), "max_files": 50, "lesson_limit": 10},
+    )
+    assert second_import_res.status_code == 200
+    assert second_import_res.json()["report"]["imported_lessons"] == 0
+
     profile_res = client.get("/api/v1/training/profile")
     assert profile_res.status_code == 200
     profile_data = profile_res.json()
     assert profile_data["workspace"]["workspace_name"] == "analytics_repo"
     assert profile_data["evaluation"]["readiness_score"] > 0.0
+    assert "self_review" in profile_data
+    assert "remediation_queue" in profile_data
+
+
+def test_training_records_interactions_and_surfaces_review():
+    create_res = client.post(
+        "/api/v1/training/profile",
+        json={"template_id": "data_engineer", "display_name": "Interaction Twin"},
+    )
+    assert create_res.status_code == 200
+
+    client.post(
+        "/api/v1/training/lesson",
+        json={
+            "title": "DAG rollback rule",
+            "content": "Inspect the failing task logs, preserve the watermark, and only backfill after confirming idempotency.",
+            "skill_tags": ["orchestration", "incident_response"],
+        },
+    )
+
+    review_before = client.post("/api/v1/training/self-review")
+    assert review_before.status_code == 200
+
+    from src.training.service import TrainingService
+
+    service = TrainingService()
+    service.record_interaction(
+        query="How do I recover a failed DAG run?",
+        response="Inspect task logs, verify retry safety, and backfill only after idempotency checks.",
+        context_blocks=["DAG rollback rule: Inspect the failing task logs..."],
+        process_used="System 2",
+        action_result="Generated local recovery plan.",
+    )
+
+    review_after = client.post("/api/v1/training/self-review")
+    assert review_after.status_code == 200
+    review = review_after.json()
+    assert review["recent_interaction_count"] >= 1
+    assert isinstance(review["generated_reflections"], list)

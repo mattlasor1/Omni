@@ -51,6 +51,17 @@ class ExecutionRouter:
         elif action == "training:plan":
             plan = self.training.build_training_plan()
             result = " | ".join(plan.get("next_steps", [])) or plan.get("message", "No training plan available.")
+        elif action == "training:review":
+            review = self.training.run_improvement_cycle(trigger="execution_router")
+            top_gap = review.get("remediation_queue", [{}])[0].get("recommendation", "No open remediation items.")
+            result = (
+                f"Readiness {review.get('readiness_score', 0.0):.2f}. "
+                f"Recent strengths: {', '.join(review.get('strengths', [])[:2]) or 'none yet'}. "
+                f"Next gap: {top_gap}"
+            )
+        elif action == "training:remediation":
+            queue = self.training.get_remediation_queue(limit=3)
+            result = " | ".join(item["recommendation"] for item in queue) if queue else "No open remediation items."
         elif action.startswith("evolve:"):
             capability = action.split("evolve:", 1)[1]
             if self.meta:

@@ -40,3 +40,19 @@ def test_swarm_status_endpoint_smoke():
     assert isinstance(data["peers"], list)
     assert isinstance(data["entangled_nodes"], int)
     assert isinstance(data["resonance_signature"], list)
+
+
+def test_manual_maintenance_routes_use_local_scheduler(mocker):
+    mock_scheduler = mocker.MagicMock()
+    mocker.patch("src.ingestion.state_api.scheduler", mock_scheduler)
+
+    reflect = client.post("/api/v1/maintenance/reflect")
+    growth = client.post("/api/v1/maintenance/growth")
+    review = client.post("/api/v1/maintenance/review")
+    nemesis = client.post("/api/v1/maintenance/nemesis")
+
+    assert reflect.status_code == 200
+    assert growth.status_code == 200
+    assert review.status_code == 200
+    assert nemesis.status_code == 200
+    assert mock_scheduler.run_now.call_count == 4

@@ -30,6 +30,8 @@ export default function TwinExecutionInterface() {
   const blocksEndRef = useRef(null);
 
   const readiness = profileState?.evaluation?.readiness_score ?? 0;
+  const selfReview = profileState?.self_review ?? null;
+  const remediationItems = profileState?.remediation_queue ?? [];
 
   const activeCompetencies = useMemo(
     () => profileState?.profile?.competencies || [],
@@ -366,6 +368,50 @@ export default function TwinExecutionInterface() {
               {(planState?.next_steps || profileState?.plan?.next_steps || []).map((step) => (
                 <div key={step} style={{ padding: "10px", backgroundColor: "#0b1220", borderRadius: "8px" }}>{step}</div>
               ))}
+            </div>
+          </section>
+
+          <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
+            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Continuous Self-Review</div>
+            {!selfReview ? (
+              <div style={{ color: "#64748b", fontSize: "0.9rem" }}>
+                Self-review will appear after the twin has enough profile or workspace context to evaluate itself.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ color: "#e5e7eb", fontSize: "0.92rem" }}>
+                  Readiness {Math.round((selfReview.readiness_score || 0) * 100)}% with {selfReview.recent_interaction_count || 0} recent interaction(s).
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
+                  Trigger: {selfReview.trigger} {typeof selfReview.trend_delta === "number" ? `| Delta ${selfReview.trend_delta >= 0 ? "+" : ""}${selfReview.trend_delta.toFixed(2)}` : ""}
+                </div>
+                {(selfReview.generated_reflections || []).length > 0 && (
+                  <div style={{ color: "#cbd5e1", fontSize: "0.86rem", lineHeight: 1.5 }}>
+                    New syntheses: {(selfReview.generated_reflections || []).map((item) => item.title).join(", ")}
+                  </div>
+                )}
+                {(selfReview.strengths || []).length > 0 && (
+                  <div style={{ color: "#cbd5e1", fontSize: "0.86rem", lineHeight: 1.5 }}>
+                    Strengths: {selfReview.strengths.join(", ")}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
+            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Gap Queue</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", color: "#cbd5e1", fontSize: "0.9rem" }}>
+              {remediationItems.length === 0 ? (
+                <div style={{ color: "#64748b" }}>No open remediation items.</div>
+              ) : (
+                remediationItems.slice(0, 4).map((item) => (
+                  <div key={item.id || item.recommendation} style={{ padding: "10px", backgroundColor: "#0b1220", borderRadius: "8px" }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.86rem", marginBottom: "4px" }}>{item.title}</div>
+                    <div style={{ color: "#cbd5e1", fontSize: "0.84rem", lineHeight: 1.5 }}>{item.recommendation}</div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </aside>

@@ -17,6 +17,24 @@ class TrustAndAuthorityProtocol:
         Returns False if it must queue the action for user approval.
         """
         score = mcts_prediction.get("score", 0.0)
+        action = mcts_prediction.get("action") or {}
+        if isinstance(action, dict):
+            action_name = str(action.get("action", ""))
+        else:
+            action_name = str(action)
+
+        safe_prefixes = (
+            "none",
+            "search:",
+            "plan:",
+            "profile:status",
+            "training:plan",
+            "training:review",
+            "training:remediation",
+            "workspace:analyze:",
+        )
+        if any(action_name.startswith(prefix) for prefix in safe_prefixes):
+            return True
         
         # High Risk Action (Score near threshold) but low epistemic belief
         if score < 0.5 and avg_bayesian_belief < 0.8:

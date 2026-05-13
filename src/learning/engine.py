@@ -54,7 +54,12 @@ class ParameterExtractor(nn.Module):
     def _init_text_stack(self) -> None:
         model_name = "sentence-transformers/all-MiniLM-L6-v2"
         local_model_dir = self.settings.model_dir / "minilm"
-        model_source = str(local_model_dir) if local_model_dir.exists() else model_name
+        model_source = str(local_model_dir) if local_model_dir.exists() else None
+        if model_source is None and not (self.settings.offline_strict or not self.settings.enable_model_downloads):
+            model_source = model_name
+        if model_source is None:
+            print("Text extractor offline fallback enabled: no bundled embedding model found.")
+            return
         kwargs = {}
         if self.settings.offline_strict or not self.settings.enable_model_downloads:
             kwargs["local_files_only"] = True

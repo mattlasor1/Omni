@@ -26,8 +26,21 @@ The training layer stores:
 - workspace snapshots imported from local repos and operator folders
 - competency evidence
 - readiness evaluations
+- live interaction history
+- self-review reports and remediation items
 
 Use the training API to build a twin around a role before expecting strong results from the query path. The highest-leverage path is to import a real local workspace so Omni can ground itself in actual SQL, DAG, config, and runbook artifacts.
+
+## Continuous Review
+
+The local maintenance scheduler now includes a dedicated review cycle. That cycle:
+
+- scores the active twin against workspace-derived evaluation scenarios
+- records recent interaction coverage
+- generates remediation tasks for weak areas
+- writes self-reflection lessons back into local training memory when enough grounded evidence exists
+
+You can trigger it directly through `POST /api/v1/training/self-review` or `POST /api/v1/maintenance/review`.
 
 ## Model Bundles
 

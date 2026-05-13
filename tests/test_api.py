@@ -12,7 +12,7 @@ def test_health_check():
 def test_ui_dashboard_loads():
     response = client.get("/")
     assert response.status_code == 200
-    assert b"OmniTwin Dashboard" in response.content
+    assert b"OmniTwin Backend Online" in response.content
 
 def test_ingest_text_endpoint(mocker):
     # Mock redis cache to avoid requiring real redis during unit tests

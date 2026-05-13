@@ -41,7 +41,15 @@ async def get_profile():
     profile = training.get_active_profile()
     plan = training.build_training_plan()
     evaluation = training.evaluate_readiness(persist=False) if profile else {"status": "unconfigured", "readiness_score": 0.0, "gaps": []}
-    return {"profile": profile, "plan": plan, "evaluation": evaluation, "workspace": training.get_latest_workspace_snapshot()}
+    self_review = training.get_latest_self_review()
+    return {
+        "profile": profile,
+        "plan": plan,
+        "evaluation": evaluation,
+        "workspace": training.get_latest_workspace_snapshot(),
+        "self_review": self_review,
+        "remediation_queue": training.get_remediation_queue(),
+    }
 
 
 @router.post("/profile")
@@ -80,6 +88,26 @@ async def get_plan():
 @router.get("/evaluate")
 async def evaluate_training():
     return training.evaluate_readiness()
+
+
+@router.get("/self-review")
+async def get_self_review():
+    review = training.get_latest_self_review()
+    if review:
+        return review
+    if training.get_active_profile():
+        return training.run_self_review(trigger="api_read", persist=False, generate_reflections=False)
+    return {"status": "unconfigured", "readiness_score": 0.0, "gaps": ["No active profession profile."]}
+
+
+@router.post("/self-review")
+async def run_self_review():
+    return training.run_improvement_cycle(trigger="manual_api")
+
+
+@router.get("/remediation")
+async def get_remediation_queue():
+    return {"items": training.get_remediation_queue()}
 
 
 @router.get("/export")

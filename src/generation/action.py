@@ -32,7 +32,9 @@ class ProceduralActionEngine:
             return {"action": f"workspace:import:{path}", "reason": "Import a local workspace into profession training."}
         if path and any(token in query for token in ["analyze", "scan", "review", "inspect"]):
             return {"action": f"workspace:analyze:{path}", "reason": "Analyze a local workspace for profession-specific signals."}
-        if any(token in query for token in ["plan", "build", "design", "debug", "improve", "fix"]):
+        if any(token in query for token in ["self-evaluate", "self evaluate", "evaluate yourself", "what is missing", "gap", "remediation", "readiness"]):
+            return {"action": "training:review", "reason": "Run the local self-review loop and surface remediation work."}
+        if any(token in query for token in ["plan", "build", "design", "debug", "improve", "fix", "review", "recover", "triage"]):
             return {"action": f"plan:{situation_context}", "reason": "Offline planner can produce a local runbook."}
         if any(token in query for token in ["what do you know", "remember", "teach", "lesson", "sql", "pipeline"]):
             return {"action": f"search:{situation_context}", "reason": "Search local lessons and profession memory."}
@@ -49,7 +51,7 @@ class ProceduralActionEngine:
             f"Situation: {situation_context}\n\n"
             f"Relevant Knowledge:\n{memory_block}\n\n"
             "Choose one of these offline-safe actions when useful: "
-            "`none`, `search:<topic>`, `plan:<task>`, `profile:status`, `training:plan`, `evolve:<capability>`.\n"
+            "`none`, `search:<topic>`, `plan:<task>`, `profile:status`, `training:plan`, `training:review`, `training:remediation`, `evolve:<capability>`.\n"
             "Output raw JSON with keys `action` and `reason`."
         )
 

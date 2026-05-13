@@ -139,7 +139,7 @@ class SolidStateWiki:
 
     def _create_client(self, host: str, port: int):
         try:
-            client = QdrantClient(host=host, port=port)
+            client = QdrantClient(host=host, port=port, check_compatibility=False)
             if client is None or not hasattr(client, "get_collections"):
                 raise RuntimeError("Qdrant client unavailable")
             client.get_collections()
