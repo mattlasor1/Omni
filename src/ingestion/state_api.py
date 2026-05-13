@@ -129,6 +129,7 @@ async def get_system_state():
         "training": {
             "profile": training_service.get_active_profile(),
             "evaluation": training_service.evaluate_readiness(persist=False) if training_service.get_active_profile() else {"status": "unconfigured", "readiness_score": 0.0},
+            "workspace": training_service.get_latest_workspace_snapshot(),
         },
     }
 

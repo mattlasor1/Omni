@@ -24,6 +24,9 @@ export default function TwinExecutionInterface() {
   const [lessonTitle, setLessonTitle] = useState("");
   const [lessonContent, setLessonContent] = useState("");
   const [lessonTags, setLessonTags] = useState("sql_modeling, orchestration");
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [workspaceReport, setWorkspaceReport] = useState(null);
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const blocksEndRef = useRef(null);
 
   const readiness = profileState?.evaluation?.readiness_score ?? 0;
@@ -63,7 +66,9 @@ export default function TwinExecutionInterface() {
         fetch(`${apiBase}/training/profile`),
         fetch(`${apiBase}/training/plan`),
       ]);
-      setProfileState(await profileRes.json());
+      const profileData = await profileRes.json();
+      setProfileState(profileData);
+      setWorkspaceReport(profileData.workspace || null);
       setPlanState(await planRes.json());
     } catch (error) {
       console.error("Training refresh failed", error);
@@ -105,6 +110,30 @@ export default function TwinExecutionInterface() {
     setLessonTitle("");
     setLessonContent("");
     await refreshTraining();
+  };
+
+  const analyzeWorkspace = async (importMode = false) => {
+    if (!workspacePath.trim()) {
+      return;
+    }
+    setWorkspaceBusy(true);
+    try {
+      const endpoint = importMode ? "import" : "analyze";
+      const res = await fetch(`${apiBase}/training/workspace/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: workspacePath, max_files: 200, lesson_limit: 20 }),
+      });
+      const data = await res.json();
+      setWorkspaceReport(data.report || null);
+      if (importMode) {
+        await refreshTraining();
+      }
+    } catch (error) {
+      console.error("Workspace analysis failed", error);
+    } finally {
+      setWorkspaceBusy(false);
+    }
   };
 
   const sendAsk = async () => {
@@ -303,6 +332,35 @@ export default function TwinExecutionInterface() {
           </section>
 
           <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
+            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Import Workspace</div>
+            <input
+              value={workspacePath}
+              onChange={(e) => setWorkspacePath(e.target.value)}
+              placeholder="C:\\work\\analytics or /repos/project"
+              style={baseInputStyle}
+            />
+            <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+              <button
+                onClick={() => analyzeWorkspace(false)}
+                disabled={workspaceBusy || !workspacePath.trim()}
+                style={{ flex: 1, padding: "12px", borderRadius: "10px", backgroundColor: workspaceBusy ? "#334155" : "#1d4ed8", color: "#fff", border: "none", cursor: workspaceBusy ? "not-allowed" : "pointer", fontWeight: 600 }}
+              >
+                Analyze
+              </button>
+              <button
+                onClick={() => analyzeWorkspace(true)}
+                disabled={workspaceBusy || !workspacePath.trim()}
+                style={{ flex: 1, padding: "12px", borderRadius: "10px", backgroundColor: workspaceBusy ? "#334155" : "#7c3aed", color: "#fff", border: "none", cursor: workspaceBusy ? "not-allowed" : "pointer", fontWeight: 600 }}
+              >
+                Import
+              </button>
+            </div>
+            <div style={{ marginTop: "10px", color: "#64748b", fontSize: "0.82rem", lineHeight: 1.5 }}>
+              Point Omni at a local repo, runbook folder, or analytics project to extract profession-specific lessons automatically.
+            </div>
+          </section>
+
+          <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
             <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Next Best Training Moves</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", color: "#cbd5e1", fontSize: "0.9rem" }}>
               {(planState?.next_steps || profileState?.plan?.next_steps || []).map((step) => (
@@ -318,6 +376,59 @@ export default function TwinExecutionInterface() {
               <div style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "10px" }}>Train locally. Query locally. Improve locally.</div>
               <div style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
                 Omni now keeps a profession profile, accepts explicit lessons, and answers from the local memory it has actually earned.
+              </div>
+            </section>
+          )}
+
+          {workspaceReport && (
+            <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "12px", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "1rem", fontWeight: 600 }}>{workspaceReport.workspace_name || "Workspace Snapshot"}</div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>{workspaceReport.workspace_path}</div>
+                </div>
+                <div style={{ color: "#cbd5e1", fontSize: "0.85rem" }}>
+                  {workspaceReport.imported_lessons ? `${workspaceReport.imported_lessons} lesson(s) imported` : `${workspaceReport.selected_files || 0} files analyzed`}
+                </div>
+              </div>
+              <div style={{ color: "#e5e7eb", lineHeight: 1.6, marginBottom: "12px" }}>{workspaceReport.summary}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "14px" }}>
+                {(workspaceReport.frameworks || []).map((framework) => (
+                  <span key={framework} style={{ padding: "6px 10px", borderRadius: "999px", backgroundColor: "#0b1220", color: "#93c5fd", fontSize: "0.8rem" }}>
+                    {framework}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px" }}>
+                <div style={{ backgroundColor: "#0b1220", borderRadius: "8px", padding: "14px" }}>
+                  <div style={{ color: "#93c5fd", fontSize: "0.78rem", textTransform: "uppercase", marginBottom: "8px" }}>Top Artifacts</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {(workspaceReport.artifacts || []).slice(0, 4).map((artifact) => (
+                      <div key={artifact.path}>
+                        <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{artifact.path}</div>
+                        <div style={{ color: "#cbd5e1", fontSize: "0.86rem", lineHeight: 1.5 }}>{artifact.summary}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ backgroundColor: "#0b1220", borderRadius: "8px", padding: "14px" }}>
+                  <div style={{ color: "#93c5fd", fontSize: "0.78rem", textTransform: "uppercase", marginBottom: "8px" }}>Evaluation Scenarios</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {(workspaceReport.evaluation_scenarios || []).map((scenario) => (
+                      <div key={scenario.name}>
+                        <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{scenario.name}</div>
+                        <div style={{ color: "#cbd5e1", fontSize: "0.86rem", lineHeight: 1.5 }}>{scenario.goal}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                {(workspaceReport.recommended_next_steps || []).slice(0, 3).map((step) => (
+                  <div key={step} style={{ padding: "10px", backgroundColor: "#0b1220", borderRadius: "8px", color: "#cbd5e1", fontSize: "0.9rem" }}>
+                    {step}
+                  </div>
+                ))}
               </div>
             </section>
           )}

@@ -23,10 +23,11 @@ The training layer stores:
 
 - one active profession profile
 - domain lessons and runbooks
+- workspace snapshots imported from local repos and operator folders
 - competency evidence
 - readiness evaluations
 
-Use the training API to build a twin around a role before expecting strong results from the query path.
+Use the training API to build a twin around a role before expecting strong results from the query path. The highest-leverage path is to import a real local workspace so Omni can ground itself in actual SQL, DAG, config, and runbook artifacts.
 
 ## Model Bundles
 

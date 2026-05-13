@@ -8,6 +8,7 @@ from copy import deepcopy
 from typing import Any, Dict, List
 
 from src.runtime import get_settings
+from src.training.workspace import WorkspaceAnalyzer
 
 
 PROFILE_TEMPLATES: Dict[str, Dict[str, Any]] = {
@@ -54,16 +55,28 @@ class TrainingService:
         self._state = self._load()
 
     def _default_state(self) -> dict:
-        return {"active_profile_id": None, "profiles": [], "lessons": [], "evaluations": []}
+        return {
+            "active_profile_id": None,
+            "profiles": [],
+            "lessons": [],
+            "evaluations": [],
+            "workspace_snapshots": [],
+        }
+
+    def _normalize_state(self, state: dict) -> dict:
+        defaults = self._default_state()
+        for key, value in defaults.items():
+            state.setdefault(key, deepcopy(value))
+        return state
 
     def _load(self) -> dict:
         if self.path.exists():
             try:
                 with self.path.open("r", encoding="utf-8") as handle:
-                    return json.load(handle)
+                    return self._normalize_state(json.load(handle))
             except json.JSONDecodeError:
                 pass
-        return self._default_state()
+        return self._normalize_state(self._default_state())
 
     def _save(self) -> None:
         with self.path.open("w", encoding="utf-8") as handle:
@@ -169,6 +182,12 @@ class TrainingService:
         if profile:
             goals = ", ".join(profile["goals"]) if profile["goals"] else "No explicit goals captured yet."
             blocks.append(f"Active twin profile: {profile['display_name']} ({profile['label']}). Goals: {goals}")
+        snapshot = self.get_latest_workspace_snapshot()
+        if snapshot:
+            frameworks = ", ".join(snapshot.get("frameworks", [])) or "local patterns"
+            blocks.append(f"Latest workspace snapshot: {snapshot.get('summary', '')} Frameworks: {frameworks}")
+            for artifact in snapshot.get("artifacts", [])[:2]:
+                blocks.append(f"Artifact {artifact['path']}: {artifact['summary']}")
         for lesson in self.search_lessons(query, limit=limit):
             blocks.append(f"{lesson['title']}: {lesson['content']}")
         return blocks
@@ -180,10 +199,12 @@ class TrainingService:
             return {
                 "status": "unconfigured",
                 "message": "No active profession profile. Create one before training.",
-                "next_steps": ["Select a profession template", "Define goals", "Add domain lessons and examples"],
+                "next_steps": ["Select a profession template", "Define goals", "Import a local workspace or add domain lessons"],
             }
 
         next_steps = []
+        if not self.get_latest_workspace_snapshot():
+            next_steps.append("Import a local workspace so Omni can learn from real artifacts, not only hand-written lessons.")
         for competency in profile["competencies"]:
             evidence_count = len(competency["evidence_ids"])
             if evidence_count < competency["target_evidence"]:
@@ -234,10 +255,68 @@ class TrainingService:
     def build_task_plan(self, task: str) -> str:
         profile = self.get_active_profile()
         label = profile["label"] if profile else "General Professional"
+        snapshot = self.get_latest_workspace_snapshot()
+        framework_hint = ", ".join(snapshot.get("frameworks", [])) if snapshot else "local tools"
         plan = [
             f"Clarify the objective and success criteria for: {task}",
             f"Map the request to {label.lower()} competencies already captured in local lessons.",
-            "Choose the lowest-risk implementation path that stays within local tools and verified knowledge.",
+            f"Choose the lowest-risk implementation path that stays within verified offline knowledge and {framework_hint}.",
             "Produce a runbook, checklist, or response the user can act on immediately.",
         ]
         return " | ".join(plan)
+
+    def get_latest_workspace_snapshot(self) -> dict | None:
+        self._refresh()
+        snapshots = self._state.get("workspace_snapshots", [])
+        if not snapshots:
+            return None
+        return deepcopy(snapshots[-1])
+
+    def analyze_workspace(self, workspace_path: str, max_files: int = 200) -> dict:
+        profile = self.get_active_profile()
+        analyzer = WorkspaceAnalyzer(workspace_path)
+        return analyzer.analyze(profile=profile, max_files=max_files)
+
+    def import_workspace(self, workspace_path: str, max_files: int = 200, lesson_limit: int = 20) -> dict:
+        report = self.analyze_workspace(workspace_path, max_files=max_files)
+        imported = 0
+        for artifact in report.get("artifacts", [])[:lesson_limit]:
+            self.add_lesson(
+                title=f"Workspace artifact: {artifact['name']}",
+                content=artifact["summary"],
+                skill_tags=artifact.get("skill_tags", []),
+                lesson_type=artifact.get("kind", "workspace_artifact"),
+                source_id=artifact.get("path", workspace_path),
+            )
+            imported += 1
+
+        self.add_lesson(
+            title=f"Workspace summary: {report['workspace_name']}",
+            content=report["summary"],
+            skill_tags=list(report.get("skill_signals", {}).keys())[:4],
+            lesson_type="workspace_summary",
+            source_id=report["workspace_path"],
+        )
+        imported += 1
+
+        snapshot = {
+            "workspace_path": report["workspace_path"],
+            "workspace_name": report["workspace_name"],
+            "summary": report["summary"],
+            "frameworks": report["frameworks"],
+            "artifact_counts": report["artifact_counts"],
+            "skill_signals": report["skill_signals"],
+            "artifacts": report["artifacts"][:10],
+            "recommended_next_steps": report["recommended_next_steps"],
+            "evaluation_scenarios": report["evaluation_scenarios"],
+            "created_at": _now(),
+            "imported_lessons": imported,
+        }
+        self._refresh()
+        with self._lock:
+            self._state["workspace_snapshots"].append(snapshot)
+            self._state["workspace_snapshots"] = self._state["workspace_snapshots"][-5:]
+            self._save()
+
+        report["imported_lessons"] = imported
+        return report

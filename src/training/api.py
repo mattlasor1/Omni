@@ -25,6 +25,12 @@ class LessonPayload(BaseModel):
     source_id: str = "manual"
 
 
+class WorkspacePayload(BaseModel):
+    path: str
+    max_files: int = 200
+    lesson_limit: int = 20
+
+
 @router.get("/templates")
 async def list_training_templates():
     return {"templates": training.list_templates()}
@@ -35,7 +41,7 @@ async def get_profile():
     profile = training.get_active_profile()
     plan = training.build_training_plan()
     evaluation = training.evaluate_readiness(persist=False) if profile else {"status": "unconfigured", "readiness_score": 0.0, "gaps": []}
-    return {"profile": profile, "plan": plan, "evaluation": evaluation}
+    return {"profile": profile, "plan": plan, "evaluation": evaluation, "workspace": training.get_latest_workspace_snapshot()}
 
 
 @router.post("/profile")
@@ -79,3 +85,19 @@ async def evaluate_training():
 @router.get("/export")
 async def export_training_snapshot():
     return training.export_snapshot()
+
+
+@router.post("/workspace/analyze")
+async def analyze_workspace(payload: WorkspacePayload):
+    report = training.analyze_workspace(payload.path, max_files=payload.max_files)
+    return {"status": "success", "report": report}
+
+
+@router.post("/workspace/import")
+async def import_workspace(payload: WorkspacePayload):
+    report = training.import_workspace(
+        workspace_path=payload.path,
+        max_files=payload.max_files,
+        lesson_limit=payload.lesson_limit,
+    )
+    return {"status": "success", "report": report}

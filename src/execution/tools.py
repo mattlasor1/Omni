@@ -26,6 +26,15 @@ class ExecutionRouter:
 
         if action == "none":
             result = "Decided to take no action."
+        elif action.startswith("workspace:analyze:"):
+            path = action.split("workspace:analyze:", 1)[1].strip()
+            report = self.training.analyze_workspace(path)
+            frameworks = ", ".join(report.get("frameworks", [])) or "custom local patterns"
+            result = f"{report['summary']} Frameworks: {frameworks}. Next: {' | '.join(report.get('recommended_next_steps', [])[:2])}"
+        elif action.startswith("workspace:import:"):
+            path = action.split("workspace:import:", 1)[1].strip()
+            report = self.training.import_workspace(path)
+            result = f"Imported {report.get('imported_lessons', 0)} lessons from {report['workspace_name']}. {report['summary']}"
         elif action.startswith("search:"):
             query = action.split("search:", 1)[1].strip()
             lessons = self.training.search_lessons(query, limit=3)

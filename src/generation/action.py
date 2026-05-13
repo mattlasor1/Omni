@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from src.learning.reasoning import CognitiveReasoningEngine
 
@@ -13,8 +14,24 @@ class ProceduralActionEngine:
     def __init__(self, reasoning_engine: CognitiveReasoningEngine):
         self.reasoning = reasoning_engine
 
+    def _extract_path(self, situation_context: str) -> str | None:
+        patterns = [
+            r"([A-Za-z]:\\[^\n\r\"]+)",
+            r"((?:\.{0,2}[\\/])?[A-Za-z0-9_\-./\\]+(?:[\\/][A-Za-z0-9_\-./\\]+)+)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, situation_context)
+            if match:
+                return match.group(1).strip().rstrip(".,)")
+        return None
+
     def _heuristic_action(self, situation_context: str) -> dict:
         query = situation_context.lower()
+        path = self._extract_path(situation_context)
+        if path and any(token in query for token in ["import", "ingest", "train on"]):
+            return {"action": f"workspace:import:{path}", "reason": "Import a local workspace into profession training."}
+        if path and any(token in query for token in ["analyze", "scan", "review", "inspect"]):
+            return {"action": f"workspace:analyze:{path}", "reason": "Analyze a local workspace for profession-specific signals."}
         if any(token in query for token in ["plan", "build", "design", "debug", "improve", "fix"]):
             return {"action": f"plan:{situation_context}", "reason": "Offline planner can produce a local runbook."}
         if any(token in query for token in ["what do you know", "remember", "teach", "lesson", "sql", "pipeline"]):
