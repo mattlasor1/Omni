@@ -3,6 +3,7 @@ import requests
 from typing import List, Dict, Any
 from src.memory.vector_db import SolidStateWiki
 from src.swarm.synchronicity import SynchronicityEngine
+from src.runtime import get_settings
 
 class SwarmProtocol:
     """
@@ -12,6 +13,7 @@ class SwarmProtocol:
     """
     def __init__(self, wiki_interface: SolidStateWiki):
         self.wiki = wiki_interface
+        self.settings = get_settings()
         # In a real swarm, this would be a dynamic list via Consul or etcd.
         self.known_peers = os.getenv("SWARM_PEERS", "").split(",")
         self.node_id = os.getenv("NODE_ID", "primary_core_node")
@@ -26,6 +28,8 @@ class SwarmProtocol:
         When this node dreams/reflects and creates a new semantic concept,
         it broadcasts the math to its peers.
         """
+        if not self.settings.enable_swarm or not self.settings.allow_lan:
+            return
         if not self.known_peers or self.known_peers == [""]:
             return
             

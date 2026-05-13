@@ -6,7 +6,11 @@ from src.ingestion.api import router as ingestion_router
 from src.ingestion.state_api import router as state_router
 from src.generation.api import router as generation_router
 from src.swarm.api import router as swarm_router
+from src.training.api import router as training_router
+from src.runtime import get_settings
 import os
+
+settings = get_settings()
 
 app = FastAPI(
     title="OmniTwin API & Dashboard",
@@ -16,10 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=["*"] if settings.offline_strict else settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +31,7 @@ app.include_router(ingestion_router, prefix="/api/v1")
 app.include_router(state_router, prefix="/api/v1")
 app.include_router(generation_router, prefix="/api/v1")
 app.include_router(swarm_router, prefix="/api/v1/swarm")
+app.include_router(training_router, prefix="/api/v1/training")
 
 # UI Templating
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,4 +47,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("src.main:app", host=settings.api_host, port=settings.api_port, reload=True)

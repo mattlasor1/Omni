@@ -1,43 +1,34 @@
 @echo off
 echo ========================================
-echo  OmniTwin AGI Installer (Windows)
+echo  OmniTwin Offline Desktop Installer
 echo ========================================
 
-:: Check for Docker
-where docker >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ERROR] Docker is not installed. OmniTwin requires Docker Desktop.
-    echo Please install Docker Desktop: https://www.docker.com/products/docker-desktop
-    pause
-    exit /b 1
-)
-
-:: Check for Python
 where python >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ERROR] Python is not installed. Required for the OmniTwin orchestrator.
-    pause
-    exit /b 1
+if errorlevel 1 (
+  echo [ERROR] Python is required.
+  exit /b 1
 )
 
-:: Check for Node.js
 where npm >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ERROR] Node.js/npm is not installed. Required for the Desktop Application.
-    pause
-    exit /b 1
+if errorlevel 1 (
+  echo [ERROR] Node.js/npm is required.
+  exit /b 1
 )
 
-echo [INFO] Dependencies met. Installing Desktop Client dependencies...
+python -m venv .venv
+call .venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+cd frontend
+call npm install
+call npm run build
+cd ..
+
 cd electron_app
 call npm install
 cd ..
 
-echo [INFO] Building Docker Cluster (This may take a while as it downloads PyTorch, Rust, and HuggingFace weights)...
-docker-compose build
-
-echo ========================================
-echo  OmniTwin Installation Complete.
-echo  To launch the application, run: launch.bat
-echo ========================================
-pause
+echo [INFO] Installation complete.
+echo [INFO] Place bundled local models under .\models for full local inference.
+echo [INFO] Launch with: launch.bat

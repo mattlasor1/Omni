@@ -3,6 +3,7 @@ import struct
 import threading
 import json
 import time
+from src.runtime import get_settings
 
 class ZeroConfigSwarm:
     """
@@ -18,8 +19,12 @@ class ZeroConfigSwarm:
         self.peers = {} # Peer_id -> last_seen_timestamp
         self.running = False
         self.sock = None
+        self.settings = get_settings()
         
     def start(self):
+        if not self.settings.enable_swarm or not self.settings.allow_lan:
+            print("ZeroConfig Swarm disabled by offline policy.")
+            return
         self.running = True
         try:
             self._setup_socket()

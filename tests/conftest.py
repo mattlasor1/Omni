@@ -1,11 +1,16 @@
 import pytest
 import os
+import shutil
 from types import SimpleNamespace
 
 import numpy as np
 
 os.environ["QDRANT_HOST"] = "localhost"
 os.environ["REDIS_HOST"] = "localhost"
+TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "tmp_data")
+if os.path.exists(TEST_DATA_DIR):
+    shutil.rmtree(TEST_DATA_DIR)
+os.environ["OMNI_DATA_DIR"] = TEST_DATA_DIR
 
 # Mock out network calls during testing
 @pytest.fixture(autouse=True)

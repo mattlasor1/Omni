@@ -13,3 +13,8 @@ target/
 *.zip
 omnitwin_genesis_seed.zip
 src/execution/plugins/
+models/
+data/cache_store.json
+data/vector_store.json
+data/training_state.json
+tests/tmp_data/

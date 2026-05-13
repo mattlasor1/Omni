@@ -4,12 +4,16 @@ from src.memory.cache import LivestreamCache
 from src.memory.vector_db import SolidStateWiki
 from src.learning.state import InternalStateEngine
 from src.maintenance.circadian import CircadianEngine
+from src.training.service import TrainingService
+from src.runtime import get_settings
 
 router = APIRouter()
 cache = None
 wiki = None
 state_engine = None
 circadian_engine = None
+training_service = TrainingService()
+settings = get_settings()
 
 def get_cache():
     global cache
@@ -100,6 +104,7 @@ async def get_system_state():
     
     return {
         "status": "online",
+        "offline_mode": settings.offline_strict,
         "cache_length": cache_len,
         "episodic_points": episodic_count,
         "semantic_points": semantic_count,
@@ -120,7 +125,11 @@ async def get_system_state():
             "pruned_count": pruned_count,
             "theodicy_resolutions": 0, # Could wire to real stats if cached
             "omega_convergence": omega
-        }
+        },
+        "training": {
+            "profile": training_service.get_active_profile(),
+            "evaluation": training_service.evaluate_readiness(persist=False) if training_service.get_active_profile() else {"status": "unconfigured", "readiness_score": 0.0},
+        },
     }
 
 @router.get("/logos")

@@ -32,6 +32,8 @@ from src.learning.stylometrics import StylometricEngine
 from src.execution.authority import TrustAndAuthorityProtocol
 from src.maintenance.circadian import PerpetualCognitiveDaemon
 from src.swarm.omnipresence import ZeroConfigSwarm
+from src.training.service import TrainingService
+from src.runtime import get_settings
 
 router = APIRouter()
 
@@ -60,9 +62,11 @@ stylometrics = None
 authority = None
 daemon = None
 swarm = None
+training = None
+settings = get_settings()
 
 def init_interfaces():
-    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, spatial, somatic, tom, dual_process, flashbulb, state, morality, self_mod, neuroplasticity, mirroring, coprocessing, stylometrics, authority, daemon, swarm
+    global wiki, cache, extractor, reasoning, rl_engine, action_engine, execution_router, world_model, graph, spatial, somatic, tom, dual_process, flashbulb, state, morality, self_mod, neuroplasticity, mirroring, coprocessing, stylometrics, authority, daemon, swarm, training
     if wiki is None:
         wiki = SolidStateWiki(host=os.getenv("QDRANT_HOST", "localhost"))
         cache = LivestreamCache(host=os.getenv("REDIS_HOST", "localhost"))
@@ -88,10 +92,12 @@ def init_interfaces():
         coprocessing = SymbioticCoProcessingEngine(graph)
         stylometrics = StylometricEngine(wiki)
         authority = TrustAndAuthorityProtocol()
+        training = TrainingService()
         
         # Omnipresence & Daemon
         swarm = ZeroConfigSwarm(node_id=str(uuid.uuid4())[:8])
-        swarm.start()
+        if settings.enable_swarm and settings.allow_lan:
+            swarm.start()
         daemon = PerpetualCognitiveDaemon(reasoning, wiki, world_model.mcts, somatic)
 
 class QueryPayload(BaseModel):
@@ -123,6 +129,14 @@ def _retrieve_semantic_context(query_params):
         context_blocks = []
     return similar_concepts, context_blocks
 
+def _retrieve_training_context(query: str) -> list[str]:
+    if training is None:
+        return []
+    try:
+        return training.get_context_blocks(query, limit=4)
+    except Exception:
+        return []
+
 def _safe_store_execution_learning(payload: QueryPayload, decision_json: dict, action_result: str, mcts_tree: str):
     try:
         learning_summary = (
@@ -151,6 +165,9 @@ async def run_query(payload: QueryPayload) -> dict:
         spatial.map_memory(event_id, payload.spatial_coords[0], payload.spatial_coords[1], payload.spatial_coords[2])
 
     similar_concepts, context_blocks = _retrieve_semantic_context(query_params)
+    training_blocks = _retrieve_training_context(payload.query)
+    if training_blocks:
+        context_blocks = context_blocks + [block for block in training_blocks if block not in context_blocks]
     context_ids = _context_ids(similar_concepts)
 
     tom_instruction = tom.model_audience(payload.user_id, payload.query, similar_concepts) if tom else "Answer clearly."
@@ -202,6 +219,7 @@ async def run_query(payload: QueryPayload) -> dict:
         "query": payload.query,
         "response": response,
         "semantic_context_used": len(context_blocks),
+        "training_profile": training.get_active_profile() if training else None,
         "context_ids": context_ids,
         "process_used": process_used,
         "action_decided": decision_json,
@@ -228,9 +246,19 @@ async def event_stream_generator(payload: QueryPayload):
     await asyncio.sleep(0.1)
     
     similar_concepts, context_blocks = _retrieve_semantic_context(query_params)
+    training_blocks = _retrieve_training_context(payload.query)
+    if training_blocks:
+        context_blocks = context_blocks + [block for block in training_blocks if block not in context_blocks]
         
     context_ids = _context_ids(similar_concepts)
     yield f"data: {json.dumps({'event': 'context', 'data': context_blocks})}\n\n"
+
+    tom_instruction = tom.model_audience(payload.user_id, payload.query, similar_concepts) if tom else "Answer clearly."
+    response, process_used = dual_process.route_query(payload.query, similar_concepts, tom_instruction)
+    if not response or response == "Cognitive LLM offline.":
+        response = reasoning.generate_response(payload.query, context_blocks)
+        process_used = "System 2"
+    yield f"data: {json.dumps({'event': 'response', 'data': response, 'process_used': process_used})}\n\n"
     
     action_result = None
     mcts_tree = None

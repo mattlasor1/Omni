@@ -1,110 +1,127 @@
-import os
-from transformers import pipeline
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, List
+
 import torch
-from typing import List, Dict, Any
+from transformers import pipeline
+
+from src.runtime import get_settings
+
 
 class CognitiveReasoningEngine:
     """
-    Integrates Local Open-Weight LLMs to provide deep semantic abstraction and reasoning.
-    The Twin is now a fully sovereign, self-contained entity operating without 
-    external corporate APIs.
+    Local-first reasoning engine.
+    It attempts to load bundled open-weight models without downloading anything
+    at runtime. When no model bundle is present, it degrades to deterministic
+    offline heuristics instead of failing.
     """
+
     def __init__(self):
         print("Initializing Sovereign Reasoning Engine (Local LLM)...")
-        # Use a very fast, lightweight model for the prototype simulation.
-        # In a full-scale deployment, this would be Llama-3 or Mistral.
-        model_id = "HuggingFaceTB/SmolLM-135M-Instruct" 
-        
+        self.settings = get_settings()
+        self.model_id = "HuggingFaceTB/SmolLM-135M-Instruct"
+        self.client = self._load_local_pipeline()
+
+    def _resolve_model_source(self) -> str:
+        bundled = self.settings.model_dir / "smollm"
+        if bundled.exists():
+            return str(bundled)
+        return self.model_id
+
+    def _load_local_pipeline(self):
         try:
-            # Check for MPS (Apple Silicon) or CUDA
             device = "cpu"
             if torch.cuda.is_available():
                 device = "cuda"
             elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 device = "mps"
-                
-            self.client = pipeline(
-                "text-generation",
-                model=model_id,
-                device=device,
-                torch_dtype=torch.float16 if device != "cpu" else torch.float32,
-            )
+
+            kwargs = {
+                "task": "text-generation",
+                "model": self._resolve_model_source(),
+                "device": device,
+                "torch_dtype": torch.float16 if device != "cpu" else torch.float32,
+            }
+            if self.settings.offline_strict or not self.settings.enable_model_downloads:
+                kwargs["local_files_only"] = True
+            client = pipeline(**kwargs)
             print(f"Sovereign Engine Online ({device}).")
-        except Exception as e:
-            print(f"Failed to load local LLM: {e}. Falling back to simulated heuristics.")
-            self.client = None
+            return client
+        except Exception as exc:
+            print(f"Failed to load local LLM: {exc}. Falling back to offline heuristics.")
+            return None
+
+    def _heuristic_response(self, query: str, semantic_context: List[str]) -> str:
+        if not semantic_context:
+            return (
+                "I do not have enough grounded local training context yet. "
+                "Add a profession profile and domain lessons so I can answer from your own material."
+            )
+
+        lead = semantic_context[0]
+        extras = semantic_context[1:3]
+        response = f"From local twin memory, the strongest relevant guidance is: {lead}"
+        if extras:
+            response += " Supporting context: " + " | ".join(extras)
+        response += f" Query handled offline: {query}"
+        return response
 
     def synthesize_concept(self, memory_cluster: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Takes a cluster of related episodic memories and synthesizes a high-level 
-        semantic concept from them. (The 'Dream' or 'Reflection' process).
-        """
         if not self.client:
-            # Fallback for local testing without API key
             return {
-                "concept": f"Abstract synthesis of {len(memory_cluster)} raw signals.",
-                "confidence": 0.8
+                "concept": f"Compressed local pattern across {len(memory_cluster)} observations.",
+                "confidence": 0.75,
             }
 
-        # Format memories for the prompt
-        contexts = [m.get("content", str(m)) for m in memory_cluster if "content" in m]
-        prompt = "Synthesize the following raw observations into a single, high-level abstract concept or rule. " \
-                 "Provide a generalized statement about what this means:\n\n"
-        for i, c in enumerate(contexts):
-            prompt += f"{i+1}. {c}\n"
-
+        contexts = [entry.get("content", str(entry)) for entry in memory_cluster if entry.get("content")]
+        prompt = (
+            "Synthesize the following raw observations into a single, high-level abstract concept.\n\n"
+            + "\n".join(f"{idx + 1}. {context}" for idx, context in enumerate(contexts))
+        )
         try:
             messages = [
-                {"role": "system", "content": "You are the cognitive abstraction layer of an advanced digital twin. Extract semantic truth from raw episodic noise."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are the abstraction layer of an offline digital twin."},
+                {"role": "user", "content": prompt},
             ]
-            
             outputs = self.client(messages, max_new_tokens=100, temperature=0.4, do_sample=True)
             synthesis = outputs[0]["generated_text"][-1]["content"].strip()
-            
-            return {
-                "concept": synthesis,
-                "confidence": 0.95
-            }
-        except Exception as e:
-            print(f"Cognitive synthesis failed: {e}")
+            return {"concept": synthesis, "confidence": 0.95}
+        except Exception as exc:
+            print(f"Cognitive synthesis failed: {exc}")
             return {"concept": "Synthesis error", "confidence": 0.0}
 
     def generate_response(self, query: str, semantic_context: List[str]) -> str:
-        """
-        Generates an active response or decision based on a user query and 
-        the retrieved semantic memory context.
-        """
         if not self.client:
-            return f"[Simulated Response] Based on internal parameterized state: '{semantic_context[0] if semantic_context else 'No context'}'."
+            return self._heuristic_response(query, semantic_context)
 
-        context_block = "\n".join([f"- {c}" for c in semantic_context])
-        prompt = f"Query: {query}\n\nRelevant Semantic Memories:\n{context_block}\n\n" \
-                 f"Generate a thoughtful response based ONLY on the provided memories."
-
+        context_block = "\n".join(f"- {entry}" for entry in semantic_context)
+        prompt = (
+            f"Query: {query}\n\n"
+            f"Relevant Semantic Memories:\n{context_block}\n\n"
+            "Generate a thoughtful response grounded only in the provided local memories."
+        )
         try:
             messages = [
-                {"role": "system", "content": "You are a digital twin. Answer the user based on your retrieved semantic memories."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are an offline digital twin. Use only retrieved local context."},
+                {"role": "user", "content": prompt},
             ]
-            
-            outputs = self.client(messages, max_new_tokens=200, temperature=0.7, do_sample=True)
+            outputs = self.client(messages, max_new_tokens=200, temperature=0.6, do_sample=True)
             return outputs[0]["generated_text"][-1]["content"].strip()
-        except Exception as e:
-            print(f"Response generation failed: {e}")
-            return "I am currently unable to form a response."
+        except Exception as exc:
+            print(f"Response generation failed: {exc}")
+            return self._heuristic_response(query, semantic_context)
 
     def _generate_generic(self, system_prompt: str, user_prompt: str, max_tokens: int = 150, temperature: float = 0.5) -> str:
-        """Helper method used by other sub-engines (MCTS, Nemesis, etc) to query the sovereign LLM."""
         if not self.client:
             return ""
         try:
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ]
             outputs = self.client(messages, max_new_tokens=max_tokens, temperature=temperature, do_sample=True)
             return outputs[0]["generated_text"][-1]["content"].strip()
-        except Exception as e:
-            print(f"Generic inference failed: {e}")
+        except Exception as exc:
+            print(f"Generic inference failed: {exc}")
             return ""

@@ -1,6 +1,7 @@
 import requests
 from typing import Dict, Any
 from src.memory.vector_db import SolidStateWiki
+from src.runtime import get_settings
 
 class AnimismProtocol:
     """
@@ -12,6 +13,7 @@ class AnimismProtocol:
     """
     def __init__(self, wiki: SolidStateWiki):
         self.wiki = wiki
+        self.settings = get_settings()
         # Map of memory_id -> IoT endpoint URL
         self.bindings: Dict[str, str] = {}
 
@@ -31,6 +33,9 @@ class AnimismProtocol:
             return
 
         endpoint = self.bindings[memory_id]
+        if not self.settings.enable_external_devices:
+            print(f"ANIMISM Pulse suppressed by offline policy for {endpoint}.")
+            return
         
         # Example payload: sending the raw somatic valence to an RGB light or smart lock
         payload = {

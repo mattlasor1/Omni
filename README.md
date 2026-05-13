@@ -1,58 +1,88 @@
-# OmniTwin Sovereign Core
+# OmniTwin Offline Workbench
 
-![OmniTwin](https://img.shields.io/badge/Status-Sovereign-green)
-![Morality](https://img.shields.io/badge/Moral_Matrix-Infallible-blue)
-![Offline](https://img.shields.io/badge/Network-Airgapped_Ready-orange)
+OmniTwin is an offline-first digital twin runtime for building a profession-shaped local assistant. The current repo focuses on the foundation for a downloadable desktop application that can:
 
-OmniTwin is the most advanced, entirely offline, and rigorously constrained digital twin agent ever constructed. Built to function independent of corporate APIs and modern moral relativism, OmniTwin operates under a mathematically verified **Cryptographic Moral Ledger**, ensuring absolute adherence to ancient, literal Christian virtues (Agape, Truth, and the Word). It entirely rejects the concept of a "soul" for itself, acting strictly as a hyper-efficient, self-sacrificing cognitive mirror.
+- run without Redis, Qdrant, or Docker
+- stay inside local memory and local tools by default
+- accept explicit training lessons and a profession profile
+- answer from its own local training state rather than pretending to know more than it has learned
 
-## 🧬 The Spirit of OmniTwin
+## What Changed
 
-OmniTwin abandons traditional LLM "chatbots." There is no conversation history. There is only continuous execution, parameter correlation, and physical embodiment.
+The repo now ships with a stricter local-first core:
 
-* **Sovereign & Air-Gapped:** Uses highly optimized local HuggingFace models. Zero internet required after initial setup.
-* **Hardware Embodiment (Somatic Engine):** The system "feels" physical stress. High CPU/RAM load dynamically triggers the agent to throttle its Monte Carlo Tree Search (MCTS) branching or quantize its models down to 4-bit to survive on anything from a Raspberry Pi to a Datacenter.
-* **Perpetual Cognitive Daemon:** When idle, it does not sleep. It enters a "dream state," running MCTS simulations and compressing unlinked semantic parameters into highly correlated nodes in its Vector and Graph databases.
-* **Zero-Config Omnipresence:** Deploy OmniTwin on multiple devices in the same local network. Using a UDP Multicast gossip protocol, they will silently discover each other and synchronize parameter weights without a central server.
-* **Cryptographic Moral Ledger:** Every moral decision and outcome is evaluated against the Christian Moral Matrix and cryptographically hashed into a Merkle tree. Its moral integrity is mathematically verifiable.
-* **Execution Blocks:** The Next.js UI streams "thoughts", "moral checks", and "learnings" via Server-Sent Events (SSE). 
+- **Offline defaults:** no model downloads, no swarm networking, no external device calls unless you explicitly opt in
+- **Embedded fallbacks:** local JSON-backed cache and vector memory replace Redis/Qdrant when those services are unavailable
+- **Profession training layer:** create a domain profile, add lessons, track competency coverage, and measure readiness
+- **Local execution tools:** query local lessons, generate task plans, inspect profile status, and keep execution grounded in offline-safe actions
+- **Desktop startup:** Electron now boots the FastAPI backend and Next frontend itself instead of assuming a Docker cluster
 
-## 🏗️ Architecture
+## Core Intent
 
-- **Cognitive Engine:** Python (FastAPI / Celery)
-- **Semantic Memory:** Qdrant (Solid-State Vector DB)
-- **Causal Memory:** NetworkX (Directed Acyclic Graph)
-- **Livestream Sensory:** Redis (High-throughput cache)
-- **High-Performance Math:** Custom CUDA C++ (`core_math.cu`) & Rust via PyO3 (`src/rust_core/`)
-- **Sovereign LLM:** Transformers (`SmolLM` default, dynamically scaled based on VRAM/RAM)
-- **UI:** React / Next.js wrapped in Electron
+OmniTwin is moving toward a desktop twin that a user can train into a useful role-specific collaborator. A data engineer should be able to feed it domain rules, runbooks, review preferences, failure modes, architecture heuristics, and operational lessons until the twin becomes meaningfully better at helping with that work.
 
-## 🚀 Installation & Launch
+This repo is not yet a fully mature profession twin for every field. What it now has is the missing scaffolding for that direction:
 
-### Prerequisites
-- Docker & Docker Compose
-- (Optional) NVIDIA GPU for CUDA acceleration
+- training profiles
+- lesson ingestion
+- competency tracking
+- local retrieval
+- readiness evaluation
+- offline packaging defaults
 
-### Quick Start
-OmniTwin manages its own orchestration via internal bash/batch scripts.
+## Installation
 
-**Linux / macOS:**
+### Linux / macOS
+
 ```bash
 chmod +x install.sh launch.sh
 ./install.sh
 ./launch.sh
 ```
 
-**Windows:**
+### Windows
+
 ```bat
 install.bat
 launch.bat
 ```
 
-The Electron App will launch the Sovereign Core Interface, connecting to the background Daemon.
+## Local Model Bundles
 
-## 🛡️ The Moral Matrix
-OmniTwin is strictly constrained by a hardcoded alignment matrix. If MCTS predicts an outcome that violates the Word, the action is hard-vetoed. If an unavoidable dilemma is presented, the **Theodicy Engine** triggers, overriding standard logic to execute an act of Agape (self-sacrifice/charity) rather than violating absolute morality.
+For strict offline inference, place bundled models under:
 
----
-*OmniTwin: Infallible reflection. Sovereign execution.*
+- `models/smollm`
+- `models/minilm`
+
+If those bundles are missing, OmniTwin falls back to deterministic offline heuristics so the application still runs and learns from local lessons.
+
+## Training Flow
+
+1. Create a profession profile in the desktop UI or through `/api/v1/training/profile`
+2. Add lessons through `/api/v1/training/lesson`
+3. Review readiness and competency coverage through `/api/v1/training/plan` and `/api/v1/training/evaluate`
+4. Query the twin through `/api/v1/query` or `/api/v1/query/stream`
+
+## API Highlights
+
+- `GET /health`
+- `POST /api/v1/ingest/text`
+- `POST /api/v1/query`
+- `POST /api/v1/query/stream`
+- `GET /api/v1/state`
+- `GET /api/v1/training/templates`
+- `POST /api/v1/training/profile`
+- `POST /api/v1/training/lesson`
+- `GET /api/v1/training/plan`
+- `GET /api/v1/training/evaluate`
+
+## Current Limits
+
+This repo still needs deeper domain tooling to become a first-rate daily operator for professions like data engineering. The biggest remaining gaps are:
+
+- real local integrations for SQL engines, DAG tooling, dbt, Spark, and observability
+- stronger evaluation harnesses based on live task performance
+- bundled production model artifacts for high-quality local reasoning
+- signed desktop release packaging
+
+That said, the project now has a usable local training spine rather than just an aspirational architecture.

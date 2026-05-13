@@ -1,18 +1,11 @@
 #!/bin/bash
-echo "Igniting OmniTwin Core..."
+set -e
 
-# Boot the backend neural cluster and UI server silently
-docker-compose up -d
+echo "Igniting OmniTwin Offline Workbench..."
 
-echo "Neural Cluster Online."
-echo "Spawning Desktop Interface..."
+if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+fi
 
-# Launch the Electron wrapper
 cd electron_app
 npm start
-
-# Once the Electron window is closed, autonomously teardown the background cluster
-echo "Desktop Interface Closed. Terminating Neural Cluster..."
-cd ..
-docker-compose down
-echo "OmniTwin Shutdown Complete."
