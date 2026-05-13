@@ -35,6 +35,24 @@ class ExecutionRouter:
             path = action.split("workspace:import:", 1)[1].strip()
             report = self.training.import_workspace(path)
             result = f"Imported {report.get('imported_lessons', 0)} lessons from {report['workspace_name']}. {report['summary']}"
+        elif action.startswith("artifact:review:"):
+            path = action.split("artifact:review:", 1)[1].strip()
+            review = self.training.review_artifact(path)
+            findings = review.get("findings", [])
+            top_finding = findings[0] if findings else None
+            if top_finding:
+                result = (
+                    f"{review['summary']} Top finding: {top_finding.get('title')} "
+                    f"({top_finding.get('severity')}). Recommendation: {top_finding.get('recommendation')}"
+                )
+            else:
+                result = review["summary"]
+        elif action == "evaluation:run":
+            evaluation = self.training.run_task_evaluation(persist=True)
+            top_gap = next((task for task in evaluation.get("tasks", []) if task.get("status") != "ready"), None)
+            result = evaluation.get("summary", "Task evaluation complete.")
+            if top_gap:
+                result = f"{result} Next gap: {top_gap.get('name')}: {top_gap.get('next_step')}"
         elif action.startswith("search:"):
             query = action.split("search:", 1)[1].strip()
             lessons = self.training.search_lessons(query, limit=3)

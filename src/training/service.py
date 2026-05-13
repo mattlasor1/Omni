@@ -5,9 +5,11 @@ import threading
 import time
 import uuid
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Dict
 
 from src.runtime import get_settings
+from src.training.data_engineer import DataEngineerSkillPack
 from src.training.workspace import WorkspaceAnalyzer
 
 
@@ -66,6 +68,8 @@ class TrainingService:
             "interactions": [],
             "self_reviews": [],
             "remediation_queue": [],
+            "artifact_reviews": [],
+            "task_evaluations": [],
         }
 
     def _normalize_profile(self, profile: dict) -> dict:
@@ -92,6 +96,8 @@ class TrainingService:
         state["interactions"] = state["interactions"][-200:]
         state["self_reviews"] = state["self_reviews"][-100:]
         state["remediation_queue"] = state["remediation_queue"][-50:]
+        state["artifact_reviews"] = state["artifact_reviews"][-200:]
+        state["task_evaluations"] = state["task_evaluations"][-100:]
         return state
 
     def _load(self) -> dict:
@@ -151,11 +157,73 @@ class TrainingService:
         competencies = " ".join(scenario.get("competencies", []))
         return _tokenize(" ".join([scenario.get("name", ""), scenario.get("goal", ""), competencies]))
 
+    def _skill_pack_for_profile(self, profile: dict | None) -> DataEngineerSkillPack | None:
+        if not profile:
+            return None
+        if profile.get("template_id") == "data_engineer" or profile.get("label") == "Data Engineer":
+            return DataEngineerSkillPack()
+        return None
+
+    def _resolve_artifact_path(self, artifact_path: str, snapshot: dict | None = None) -> Path:
+        requested = Path(artifact_path).expanduser()
+        if requested.is_absolute():
+            return requested.resolve()
+
+        if snapshot and snapshot.get("workspace_path"):
+            workspace_candidate = Path(snapshot["workspace_path"]).expanduser().resolve() / requested
+            if workspace_candidate.exists():
+                return workspace_candidate.resolve()
+
+        project_candidate = self.settings.project_root / requested
+        if project_candidate.exists():
+            return project_candidate.resolve()
+
+        return requested.resolve()
+
+    def _order_remediation_queue(self, queue: list[dict], limit: int = 20) -> list[dict]:
+        deduped = {}
+        for item in queue:
+            deduped[item["recommendation"]] = item
+        ordered = list(deduped.values())
+        ordered.sort(key=lambda item: {"high": 0, "medium": 1, "low": 2}.get(item["priority"], 3))
+        return ordered[:limit]
+
+    def _task_remediation_items(self, task_evaluation: dict | None) -> list[dict]:
+        if not task_evaluation or task_evaluation.get("status") == "unconfigured":
+            return []
+        queue = []
+        for task in task_evaluation.get("tasks", []):
+            if task.get("status") == "ready":
+                continue
+            queue.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "title": f"Skill task: {task.get('name', 'Task')}",
+                    "recommendation": task.get("next_step", "Import more local evidence for this task."),
+                    "priority": "high" if float(task.get("score", 0.0)) < 50 else "medium",
+                    "competencies": [task.get("name", "Task")],
+                    "created_at": _now(),
+                    "status": "open",
+                    "source": "task_evaluation",
+                }
+            )
+        return queue
+
     def list_templates(self) -> list[dict]:
         return [
             {"template_id": template_id, **deepcopy(template)}
             for template_id, template in PROFILE_TEMPLATES.items()
         ]
+
+    def get_skill_pack_definition(self) -> dict:
+        profile = self.get_active_profile()
+        skill_pack = self._skill_pack_for_profile(profile)
+        if not skill_pack:
+            return {
+                "status": "unconfigured",
+                "message": "No profession-specific skill pack is active for the current profile.",
+            }
+        return {"status": "active", "skill_pack": skill_pack.definition()}
 
     def activate_profile(
         self,
@@ -288,6 +356,12 @@ class TrainingService:
         for item in self.get_remediation_queue(limit=3):
             next_steps.append(item["recommendation"])
 
+        task_evaluation = self.get_latest_task_evaluation()
+        if task_evaluation:
+            for task in task_evaluation.get("tasks", []):
+                if task.get("status") != "ready" and task.get("next_step"):
+                    next_steps.append(task["next_step"])
+
         if not next_steps:
             next_steps.append("Run domain evaluations and keep using Omni on live tasks so the self-review loop can refine it.")
 
@@ -338,6 +412,68 @@ class TrainingService:
     def export_snapshot(self) -> dict:
         self._refresh()
         return deepcopy(self._state)
+
+    def review_artifact(self, artifact_path: str) -> dict:
+        snapshot = self.get_latest_workspace_snapshot()
+        profile = self.get_active_profile()
+        skill_pack = self._skill_pack_for_profile(profile) or DataEngineerSkillPack()
+        resolved_path = self._resolve_artifact_path(artifact_path, snapshot)
+        workspace_root = snapshot.get("workspace_path") if snapshot else resolved_path.parent
+        review = skill_pack.review_artifact(resolved_path, workspace_root=workspace_root)
+        review["profile_id"] = profile["id"] if profile else None
+
+        findings = review.get("findings", [])
+        finding_text = "; ".join(
+            f"{finding['severity']}: {finding['title']} -> {finding['recommendation']}"
+            for finding in findings[:3]
+        ) or "No obvious findings from the local rubric."
+        lesson = self.add_lesson(
+            title=f"Artifact review: {review['path']}",
+            content=f"{review['summary']} {finding_text}",
+            skill_tags=[finding.get("competency", "").lower().replace(" ", "_") for finding in findings if finding.get("competency")],
+            lesson_type="artifact_review",
+            source_id=f"artifact_review:{review['absolute_path']}",
+            counts_as_evidence=False,
+        )
+        review["lesson_id"] = lesson["id"]
+
+        with self._lock:
+            self._state = self._load()
+            self._state["artifact_reviews"].append(review)
+            self._state["artifact_reviews"] = self._state["artifact_reviews"][-200:]
+            self._save()
+        return deepcopy(review)
+
+    def get_recent_artifact_reviews(self, limit: int = 20) -> list[dict]:
+        self._refresh()
+        return deepcopy(self._state.get("artifact_reviews", [])[-limit:])
+
+    def run_task_evaluation(self, persist: bool = True) -> dict:
+        snapshot = self.get_latest_workspace_snapshot()
+        profile = self.get_active_profile()
+        skill_pack = self._skill_pack_for_profile(profile) or DataEngineerSkillPack()
+        evaluation = skill_pack.evaluate_workspace(snapshot)
+        evaluation["profile_id"] = profile["id"] if profile else None
+        evaluation["workspace_path"] = snapshot.get("workspace_path") if snapshot else None
+
+        if persist:
+            with self._lock:
+                self._state = self._load()
+                self._state["task_evaluations"].append(evaluation)
+                self._state["task_evaluations"] = self._state["task_evaluations"][-100:]
+                self._state["remediation_queue"] = self._order_remediation_queue(
+                    self._state.get("remediation_queue", []) + self._task_remediation_items(evaluation),
+                    limit=50,
+                )
+                self._save()
+        return deepcopy(evaluation)
+
+    def get_latest_task_evaluation(self) -> dict | None:
+        self._refresh()
+        evaluations = self._state.get("task_evaluations", [])
+        if not evaluations:
+            return None
+        return deepcopy(evaluations[-1])
 
     def build_task_plan(self, task: str) -> str:
         profile = self.get_active_profile()
@@ -517,12 +653,7 @@ class TrainingService:
                     }
                 )
 
-        deduped = {}
-        for item in queue:
-            deduped[item["recommendation"]] = item
-        ordered = list(deduped.values())
-        ordered.sort(key=lambda item: {"high": 0, "medium": 1, "low": 2}.get(item["priority"], 3))
-        return ordered[:20]
+        return self._order_remediation_queue(queue, limit=20)
 
     def _generate_reflection_lessons(self, profile: dict, scenario_results: list[dict], snapshot: dict | None) -> list[dict]:
         generated = []
@@ -576,7 +707,9 @@ class TrainingService:
         interactions = self.get_recent_interactions(limit=20)
         scenario_results = [self._evaluate_scenario(scenario, snapshot, profile, interactions) for scenario in scenarios]
         strengths = [result["name"] for result in scenario_results if result["status"] == "ready"]
+        task_evaluation = self.run_task_evaluation(persist=False)
         remediation_queue = self._build_remediation_queue(readiness, scenario_results, snapshot)
+        remediation_queue = self._order_remediation_queue(remediation_queue + self._task_remediation_items(task_evaluation))
         generated_reflections = self._generate_reflection_lessons(profile, scenario_results, snapshot) if generate_reflections else []
 
         previous_review = self.get_latest_self_review()
@@ -590,6 +723,7 @@ class TrainingService:
             "strengths": strengths,
             "gaps": readiness.get("gaps", []),
             "scenario_results": scenario_results,
+            "task_evaluation": task_evaluation,
             "remediation_queue": remediation_queue,
             "generated_reflections": generated_reflections,
             "recent_interaction_count": len(interactions),
@@ -670,6 +804,8 @@ class TrainingService:
             self._save()
 
         review = self.run_self_review(trigger="workspace_import", persist=True, generate_reflections=True)
+        task_evaluation = self.run_task_evaluation(persist=True)
         report["imported_lessons"] = imported
         report["self_review"] = review
+        report["task_evaluation"] = task_evaluation
         return report

@@ -89,6 +89,7 @@ def test_workspace_analysis_and_import(tmp_path):
     report = analyze_res.json()["report"]
     assert "dbt" in report["frameworks"]
     assert any(artifact["kind"] == "python_job" for artifact in report["artifacts"])
+    assert any("review_score" in artifact for artifact in report["artifacts"])
 
     import_res = client.post(
         "/api/v1/training/workspace/import",
@@ -111,7 +112,24 @@ def test_workspace_analysis_and_import(tmp_path):
     assert profile_data["workspace"]["workspace_name"] == "analytics_repo"
     assert profile_data["evaluation"]["readiness_score"] > 0.0
     assert "self_review" in profile_data
+    assert "task_evaluation" in profile_data
+    assert "artifact_reviews" in profile_data
     assert "remediation_queue" in profile_data
+
+    artifact_res = client.post(
+        "/api/v1/training/artifact/review",
+        json={"path": "models/orders.sql"},
+    )
+    assert artifact_res.status_code == 200
+    artifact_review = artifact_res.json()["review"]
+    assert artifact_review["artifact_type"] == "sql_model"
+    assert artifact_review["score"] > 0
+
+    task_eval_res = client.post("/api/v1/training/evals/run")
+    assert task_eval_res.status_code == 200
+    task_evaluation = task_eval_res.json()["evaluation"]
+    assert task_evaluation["overall_score"] > 0
+    assert any(task["name"] == "SQL Model Review" for task in task_evaluation["tasks"])
 
 
 def test_training_records_interactions_and_surfaces_review():

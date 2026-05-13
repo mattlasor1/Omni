@@ -18,6 +18,7 @@ class ProceduralActionEngine:
         patterns = [
             r"([A-Za-z]:\\[^\n\r\"]+)",
             r"((?:\.{0,2}[\\/])?[A-Za-z0-9_\-./\\]+(?:[\\/][A-Za-z0-9_\-./\\]+)+)",
+            r"([A-Za-z0-9_\-.]+\.(?:sql|py|ya?ml|md|txt))",
         ]
         for pattern in patterns:
             match = re.search(pattern, situation_context)
@@ -25,11 +26,20 @@ class ProceduralActionEngine:
                 return match.group(1).strip().rstrip(".,)")
         return None
 
+    def _looks_like_artifact_path(self, path: str | None) -> bool:
+        if not path:
+            return False
+        return any(path.lower().endswith(suffix) for suffix in (".sql", ".py", ".yml", ".yaml", ".md", ".txt"))
+
     def _heuristic_action(self, situation_context: str) -> dict:
         query = situation_context.lower()
         path = self._extract_path(situation_context)
+        if any(token in query for token in ["task evaluation", "task eval", "benchmark", "run eval", "run evaluation", "skill evaluation"]):
+            return {"action": "evaluation:run", "reason": "Run the local skill task evaluation rubric."}
         if path and any(token in query for token in ["import", "ingest", "train on"]):
             return {"action": f"workspace:import:{path}", "reason": "Import a local workspace into profession training."}
+        if path and self._looks_like_artifact_path(path) and any(token in query for token in ["analyze", "scan", "review", "inspect"]):
+            return {"action": f"artifact:review:{path}", "reason": "Review a local artifact with the active profession skill pack."}
         if path and any(token in query for token in ["analyze", "scan", "review", "inspect"]):
             return {"action": f"workspace:analyze:{path}", "reason": "Analyze a local workspace for profession-specific signals."}
         if any(token in query for token in ["self-evaluate", "self evaluate", "evaluate yourself", "what is missing", "gap", "remediation", "readiness"]):
@@ -51,7 +61,8 @@ class ProceduralActionEngine:
             f"Situation: {situation_context}\n\n"
             f"Relevant Knowledge:\n{memory_block}\n\n"
             "Choose one of these offline-safe actions when useful: "
-            "`none`, `search:<topic>`, `plan:<task>`, `profile:status`, `training:plan`, `training:review`, `training:remediation`, `evolve:<capability>`.\n"
+            "`none`, `search:<topic>`, `plan:<task>`, `profile:status`, `training:plan`, `training:review`, "
+            "`training:remediation`, `artifact:review:<path>`, `evaluation:run`, `evolve:<capability>`.\n"
             "Output raw JSON with keys `action` and `reason`."
         )
 

@@ -5,6 +5,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
+from src.training.data_engineer import DataEngineerSkillPack
+
 
 IGNORED_DIRS = {
     ".git",
@@ -53,11 +55,14 @@ class WorkspaceAnalyzer:
         frameworks = set()
         skill_counter = Counter()
         kind_counter = Counter()
+        skill_pack = DataEngineerSkillPack() if self._is_data_engineer_profile(profile) else None
 
         for file_path in candidates[:max_files]:
             artifact = self._inspect_file(file_path)
             if not artifact:
                 continue
+            if skill_pack:
+                artifact = self._attach_skill_pack_review(artifact, file_path, skill_pack)
             artifacts.append(artifact)
             frameworks.update(artifact["frameworks"])
             skill_counter.update(artifact["skill_tags"])
@@ -72,11 +77,31 @@ class WorkspaceAnalyzer:
             "skill_signals": dict(skill_counter),
             "artifacts": artifacts[:30],
             "summary": self._build_summary(artifacts, frameworks),
+            "skill_pack": skill_pack.definition() if skill_pack else None,
             "competency_signal": self._build_competency_signal(profile, skill_counter),
             "evaluation_scenarios": self._build_evaluation_scenarios(profile, artifacts, frameworks),
             "recommended_next_steps": self._build_next_steps(artifacts, frameworks, skill_counter),
         }
         return report
+
+    def _is_data_engineer_profile(self, profile: dict | None) -> bool:
+        if not profile:
+            return False
+        return profile.get("template_id") == "data_engineer" or profile.get("label") == "Data Engineer"
+
+    def _attach_skill_pack_review(self, artifact: dict, path: Path, skill_pack: DataEngineerSkillPack) -> dict:
+        try:
+            review = skill_pack.review_artifact(path, workspace_root=self.root if self.root.is_dir() else path.parent)
+        except Exception:
+            return artifact
+        return {
+            **artifact,
+            "review_score": review["score"],
+            "review_grade": review["grade"],
+            "finding_count": len(review.get("findings", [])),
+            "review_findings": review.get("findings", [])[:3],
+            "suggested_tests": review.get("suggested_tests", [])[:4],
+        }
 
     def _iter_candidate_files(self) -> Iterable[Path]:
         if self.root.is_file():

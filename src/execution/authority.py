@@ -32,6 +32,8 @@ class TrustAndAuthorityProtocol:
             "training:review",
             "training:remediation",
             "workspace:analyze:",
+            "artifact:review:",
+            "evaluation:run",
         )
         if any(action_name.startswith(prefix) for prefix in safe_prefixes):
             return True

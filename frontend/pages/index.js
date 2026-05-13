@@ -27,11 +27,16 @@ export default function TwinExecutionInterface() {
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceReport, setWorkspaceReport] = useState(null);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
+  const [artifactPath, setArtifactPath] = useState("");
+  const [artifactReview, setArtifactReview] = useState(null);
+  const [taskEvaluation, setTaskEvaluation] = useState(null);
+  const [skillBusy, setSkillBusy] = useState(false);
   const blocksEndRef = useRef(null);
 
   const readiness = profileState?.evaluation?.readiness_score ?? 0;
   const selfReview = profileState?.self_review ?? null;
   const remediationItems = profileState?.remediation_queue ?? [];
+  const activeTaskEvaluation = taskEvaluation || profileState?.task_evaluation || null;
 
   const activeCompetencies = useMemo(
     () => profileState?.profile?.competencies || [],
@@ -71,6 +76,8 @@ export default function TwinExecutionInterface() {
       const profileData = await profileRes.json();
       setProfileState(profileData);
       setWorkspaceReport(profileData.workspace || null);
+      setTaskEvaluation(profileData.task_evaluation || null);
+      setArtifactReview((profileData.artifact_reviews || []).slice(-1)[0] || null);
       setPlanState(await planRes.json());
     } catch (error) {
       console.error("Training refresh failed", error);
@@ -135,6 +142,41 @@ export default function TwinExecutionInterface() {
       console.error("Workspace analysis failed", error);
     } finally {
       setWorkspaceBusy(false);
+    }
+  };
+
+  const reviewArtifact = async () => {
+    if (!artifactPath.trim()) {
+      return;
+    }
+    setSkillBusy(true);
+    try {
+      const res = await fetch(`${apiBase}/training/artifact/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: artifactPath }),
+      });
+      const data = await res.json();
+      setArtifactReview(data.review || null);
+      await refreshTraining();
+    } catch (error) {
+      console.error("Artifact review failed", error);
+    } finally {
+      setSkillBusy(false);
+    }
+  };
+
+  const runTaskEvaluation = async () => {
+    setSkillBusy(true);
+    try {
+      const res = await fetch(`${apiBase}/training/evals/run`, { method: "POST" });
+      const data = await res.json();
+      setTaskEvaluation(data.evaluation || null);
+      await refreshTraining();
+    } catch (error) {
+      console.error("Task evaluation failed", error);
+    } finally {
+      setSkillBusy(false);
     }
   };
 
@@ -363,6 +405,37 @@ export default function TwinExecutionInterface() {
           </section>
 
           <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
+            <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Skill Pack</div>
+            <input
+              value={artifactPath}
+              onChange={(e) => setArtifactPath(e.target.value)}
+              placeholder="models/orders.sql"
+              style={baseInputStyle}
+            />
+            <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+              <button
+                onClick={reviewArtifact}
+                disabled={skillBusy || !artifactPath.trim()}
+                style={{ flex: 1, padding: "12px", borderRadius: "10px", backgroundColor: skillBusy || !artifactPath.trim() ? "#334155" : "#0f766e", color: "#fff", border: "none", cursor: skillBusy || !artifactPath.trim() ? "not-allowed" : "pointer", fontWeight: 600 }}
+              >
+                Review File
+              </button>
+              <button
+                onClick={runTaskEvaluation}
+                disabled={skillBusy}
+                style={{ flex: 1, padding: "12px", borderRadius: "10px", backgroundColor: skillBusy ? "#334155" : "#7c3aed", color: "#fff", border: "none", cursor: skillBusy ? "not-allowed" : "pointer", fontWeight: 600 }}
+              >
+                Run Eval
+              </button>
+            </div>
+            {activeTaskEvaluation && (
+              <div style={{ marginTop: "12px", color: "#cbd5e1", fontSize: "0.86rem", lineHeight: 1.5 }}>
+                Task score {Math.round(activeTaskEvaluation.overall_score || 0)} | {activeTaskEvaluation.status}
+              </div>
+            )}
+          </section>
+
+          <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "18px" }}>
             <div style={{ fontSize: "0.85rem", color: "#93c5fd", marginBottom: "10px" }}>Next Best Training Moves</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", color: "#cbd5e1", fontSize: "0.9rem" }}>
               {(planState?.next_steps || profileState?.plan?.next_steps || []).map((step) => (
@@ -473,6 +546,54 @@ export default function TwinExecutionInterface() {
                 {(workspaceReport.recommended_next_steps || []).slice(0, 3).map((step) => (
                   <div key={step} style={{ padding: "10px", backgroundColor: "#0b1220", borderRadius: "8px", color: "#cbd5e1", fontSize: "0.9rem" }}>
                     {step}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {artifactReview && (
+            <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "12px", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "1rem", fontWeight: 600 }}>{artifactReview.path}</div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>{artifactReview.artifact_type} | {artifactReview.grade}</div>
+                </div>
+                <div style={{ color: "#e5e7eb", fontSize: "1.4rem", fontWeight: 700 }}>{Math.round(artifactReview.score || 0)}</div>
+              </div>
+              <div style={{ color: "#e5e7eb", lineHeight: 1.6, marginBottom: "12px" }}>{artifactReview.summary}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {(artifactReview.findings || []).slice(0, 4).map((finding) => (
+                  <div key={`${finding.severity}-${finding.title}`} style={{ padding: "12px", backgroundColor: "#0b1220", borderRadius: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "4px" }}>
+                      <span style={{ fontWeight: 600 }}>{finding.title}</span>
+                      <span style={{ color: finding.severity === "high" || finding.severity === "critical" ? "#f97316" : "#93c5fd", fontSize: "0.82rem" }}>{finding.severity}</span>
+                    </div>
+                    <div style={{ color: "#cbd5e1", fontSize: "0.86rem", lineHeight: 1.5 }}>{finding.recommendation}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {activeTaskEvaluation && (
+            <section style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "8px", padding: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "12px", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "1rem", fontWeight: 600 }}>Task Evaluation</div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>{activeTaskEvaluation.status}</div>
+                </div>
+                <div style={{ color: "#e5e7eb", fontSize: "1.4rem", fontWeight: 700 }}>{Math.round(activeTaskEvaluation.overall_score || 0)}</div>
+              </div>
+              <div style={{ color: "#e5e7eb", lineHeight: 1.6, marginBottom: "12px" }}>{activeTaskEvaluation.summary}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
+                {(activeTaskEvaluation.tasks || []).map((task) => (
+                  <div key={task.name} style={{ backgroundColor: "#0b1220", borderRadius: "8px", padding: "14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "6px" }}>
+                      <span style={{ fontWeight: 600 }}>{task.name}</span>
+                      <span style={{ color: task.status === "ready" ? "#22c55e" : "#f59e0b", fontSize: "0.82rem" }}>{task.status}</span>
+                    </div>
+                    <div style={{ color: "#cbd5e1", fontSize: "0.86rem", lineHeight: 1.5 }}>{task.next_step}</div>
                   </div>
                 ))}
               </div>

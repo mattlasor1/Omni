@@ -45,6 +45,19 @@ def test_offline_profession_twin_acceptance_flow(tmp_path):
     assert import_res.status_code == 200
     assert import_res.json()["report"]["imported_lessons"] >= 4
 
+    artifact_res = client.post(
+        "/api/v1/training/artifact/review",
+        json={"path": "models/orders.sql"},
+    )
+    assert artifact_res.status_code == 200
+    assert artifact_res.json()["review"]["artifact_type"] == "sql_model"
+
+    task_eval_res = client.post("/api/v1/training/evals/run")
+    assert task_eval_res.status_code == 200
+    task_evaluation = task_eval_res.json()["evaluation"]
+    assert task_evaluation["overall_score"] > 0
+    assert any(task["status"] in {"ready", "needs_work"} for task in task_evaluation["tasks"])
+
     query_res = client.post(
         "/api/v1/query",
         json={

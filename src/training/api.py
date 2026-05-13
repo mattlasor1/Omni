@@ -31,6 +31,10 @@ class WorkspacePayload(BaseModel):
     lesson_limit: int = 20
 
 
+class ArtifactPayload(BaseModel):
+    path: str
+
+
 @router.get("/templates")
 async def list_training_templates():
     return {"templates": training.list_templates()}
@@ -48,6 +52,9 @@ async def get_profile():
         "evaluation": evaluation,
         "workspace": training.get_latest_workspace_snapshot(),
         "self_review": self_review,
+        "task_evaluation": training.get_latest_task_evaluation(),
+        "artifact_reviews": training.get_recent_artifact_reviews(limit=5),
+        "skill_pack": training.get_skill_pack_definition(),
         "remediation_queue": training.get_remediation_queue(),
     }
 
@@ -108,6 +115,34 @@ async def run_self_review():
 @router.get("/remediation")
 async def get_remediation_queue():
     return {"items": training.get_remediation_queue()}
+
+
+@router.get("/skill-pack")
+async def get_skill_pack():
+    return training.get_skill_pack_definition()
+
+
+@router.post("/artifact/review")
+async def review_artifact(payload: ArtifactPayload):
+    return {"status": "success", "review": training.review_artifact(payload.path)}
+
+
+@router.get("/artifact/reviews")
+async def get_artifact_reviews(limit: int = 20):
+    return {"reviews": training.get_recent_artifact_reviews(limit=limit)}
+
+
+@router.post("/evals/run")
+async def run_task_evaluation():
+    return {"status": "success", "evaluation": training.run_task_evaluation(persist=True)}
+
+
+@router.get("/evals/latest")
+async def get_latest_task_evaluation():
+    evaluation = training.get_latest_task_evaluation()
+    if evaluation:
+        return evaluation
+    return {"status": "unconfigured", "overall_score": 0.0, "tasks": []}
 
 
 @router.get("/export")

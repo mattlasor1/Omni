@@ -133,6 +133,8 @@ async def get_system_state():
             "evaluation": training_service.evaluate_readiness(persist=False) if training_service.get_active_profile() else {"status": "unconfigured", "readiness_score": 0.0},
             "workspace": training_service.get_latest_workspace_snapshot(),
             "self_review": training_service.get_latest_self_review(),
+            "task_evaluation": training_service.get_latest_task_evaluation(),
+            "artifact_reviews": training_service.get_recent_artifact_reviews(limit=3),
             "remediation_queue": training_service.get_remediation_queue(limit=5),
         },
         "maintenance": scheduler.get_status(),
